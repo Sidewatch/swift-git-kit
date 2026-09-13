@@ -145,6 +145,26 @@ public extension Git {
         return parseNumstat(out)
     }
 
+    /// Total insertions/deletions between two commits, or between one commit and the
+    /// working tree.
+    ///
+    /// Parses `git diff --numstat <from> [<to>]`. Omitting `to` compares `from` against
+    /// the working tree as it stands, so the result moves as the tree is edited; pass
+    /// both ends for a span that cannot change. Untracked files are not counted (they
+    /// are absent from `git diff`); binary files contribute nothing. Returns `(0, 0)`
+    /// on any failure.
+    ///
+    /// - Parameters:
+    ///   - root: The repository root.
+    ///   - from: The commit the span starts at.
+    ///   - to: The commit it ends at, or `nil` to compare against the working tree.
+    static func diffStat(repoRoot root: URL, from: String, to: String?) -> (insertions: Int, deletions: Int) {
+        var args = ["diff", "--numstat", "--no-color", from]
+        if let to { args.append(to) }
+        guard let out = run(args, in: root) else { return (0, 0) }
+        return parseNumstat(out)
+    }
+
     /// Sums a `git diff --numstat` body. Each line is `<added>\t<deleted>\t<path>`;
     /// binary files report `-` in both count columns and are skipped. Pure — exposed
     /// for testing without a repo.
