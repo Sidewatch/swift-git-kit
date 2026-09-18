@@ -145,6 +145,22 @@ final class GitCheckpointTests: XCTestCase {
         XCTAssertFalse(diff.contains("b.txt"))
     }
 
+    func testCheckpointDiffAgainstWorkingTreeCanNarrowToOnePath() throws {
+        // The two-commit branch narrowed with `-- path`; the working-tree branch ran a bare
+        // `git diff <from>` and only filtered the UNTRACKED files it spliced on afterwards.
+        let root = try seededRepo()
+        let start = try XCTUnwrap(Git.createCheckpoint(repoRoot: root))
+        try write("a\n", to: "a.txt", in: root)
+        try write("b\n", to: "b.txt", in: root)
+        _ = Git.run(["add", "-A"], in: root)
+        XCTAssertNotNil(Git.run(["commit", "-q", "-m", "both"], in: root))
+        try write("a2\n", to: "a.txt", in: root)
+        try write("b2\n", to: "b.txt", in: root)
+        let diff = try XCTUnwrap(Git.checkpointDiff(from: start, to: nil, path: "a.txt", repoRoot: root))
+        XCTAssertTrue(diff.contains("a.txt"))
+        XCTAssertFalse(diff.contains("b.txt"), diff)
+    }
+
     func testCheckpointDiffAgainstLiveWorkingTree() throws {
         // The turn in progress has an opening snapshot but no closing one, so its diff runs
         // against the working tree as it stands right now.

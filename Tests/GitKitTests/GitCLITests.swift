@@ -270,12 +270,47 @@ final class GitKitTests: XCTestCase {
         XCTAssertEqual(Git.status(repoRoot: root).first { $0.path == "s.txt" }?.kind, .untracked)
     }
 
-    func testDiscardUntrackedDeletesFile() throws {
+    func testDiscardUntrackedMovesTheFileToTheTrash() throws {
+        // Recoverable, not gone: the Trash is the one undo a discarded agent-written file has.
         let root = try makeRepo()
-        let file = root.appendingPathComponent("junk.txt")
-        try write("junk", to: "junk.txt", in: root)
+        let name = "gitcli-trash-\(UUID().uuidString).txt"
+        let file = root.appendingPathComponent(name)
+        try write("recoverable", to: name, in: root)
         XCTAssertTrue(Git.discard(file, kind: .untracked, repoRoot: root))
         XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
+        let trash = try XCTUnwrap(FileManager.default.urls(for: .trashDirectory, in: .userDomainMask).first)
+        let landed = trash.appendingPathComponent(name)
+        defer { try? FileManager.default.removeItem(at: landed) }
+        XCTAssertEqual(try String(contentsOf: landed, encoding: .utf8), "recoverable",
+                       "the discarded file should be in \(trash.path)")
+    }
+
+    func testDiscardUntrackedRefusesAFileOutsideTheRepo() throws {
+        // The tracked kinds always refused an out-of-root path; the untracked branch was a bare
+        // removeItem on whatever URL arrived.
+        let root = try makeRepo()
+        let outside = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("gitcli-outside-\(UUID().uuidString).txt")
+        try "keep me".write(to: outside, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: outside) }
+        XCTAssertFalse(Git.discard(outside, kind: .untracked, repoRoot: root))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: outside.path))
+    }
+
+    func testDiscardUntrackedRefusesADirectoryAndLeavesANestedRepoIntact() throws {
+        // `git status -uall` reports a nested repository as ONE untracked entry, `nested/`.
+        // Discarding "that untracked file" used to be removeItem on the directory: a whole
+        // checkout, .git included, gone behind a dialog that said "file".
+        let root = try makeRepo()
+        let nested = root.appendingPathComponent("nested", isDirectory: true)
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+        XCTAssertNotNil(Git.run(["init", "-q"], in: nested))
+        try "x".write(to: nested.appendingPathComponent("x.txt"), atomically: true, encoding: .utf8)
+        XCTAssertEqual(Git.status(repoRoot: root).map(\.path), ["nested/"])
+        XCTAssertFalse(Git.discard(nested, kind: .untracked, repoRoot: root))
+        XCTAssertFalse(Git.discard(root.appendingPathComponent("nested/"), kind: .untracked, repoRoot: root))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: nested.appendingPathComponent("x.txt").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: nested.appendingPathComponent(".git").path))
     }
 
     func testDiscardModifiedRevertsToHead() throws {
@@ -595,26 +630,6 @@ final class GitKitTests: XCTestCase {
     }
 
     // MARK: - counts (pure hunk-field parser)
-
-    func testCountsParsesStartAndCount() {
-        XCTAssertEqual(Git.counts(Substring("+12,3")).0, 12)
-        XCTAssertEqual(Git.counts(Substring("+12,3")).1, 3)
-        XCTAssertEqual(Git.counts(Substring("-40,7")).0, 40)
-        XCTAssertEqual(Git.counts(Substring("-40,7")).1, 7)
-    }
-
-    func testCountsDefaultsMissingCountToOne() {
-        XCTAssertEqual(Git.counts(Substring("+5")).1, 1)
-        XCTAssertEqual(Git.counts(Substring("-1")).1, 1)
-    }
-
-    func testCountsHandlesZeroCount() {
-        let (start, count) = Git.counts(Substring("+1,0"))
-        XCTAssertEqual(start, 1)
-        XCTAssertEqual(count, 0)
-    }
-
-    // MARK: - relativeTime (pure, deterministic via injected `now`)
 
     func testRelativeTimeBuckets() {
         let t: TimeInterval = 1_000_000

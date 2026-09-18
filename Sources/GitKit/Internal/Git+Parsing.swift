@@ -12,18 +12,6 @@ import Foundation
 
 extension Git {
 
-    /// Parses a unified-diff hunk field like `"+12,3"` → `(start: 12, count: 3)`.
-    ///
-    /// The leading `+`/`-` is stripped; a missing count defaults to `1`
-    /// (e.g. `"-5"` → `(5, 1)`), matching the unified-diff shorthand.
-    static func counts(_ field: Substring) -> (Int, Int) {
-        let body = field.dropFirst()  // strip +/-
-        let nums = body.split(separator: ",")
-        let start = Int(nums.first ?? "0") ?? 0
-        let count = nums.count > 1 ? (Int(nums[1]) ?? 1) : 1
-        return (start, count)
-    }
-
     /// Formats a Unix epoch timestamp as a short relative age (`"just now"`,
     /// `"5m ago"`, `"3d ago"`, `"2mo ago"`, `"1y ago"`).
     ///

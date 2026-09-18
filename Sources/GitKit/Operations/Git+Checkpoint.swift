@@ -126,7 +126,9 @@ public extension Git {
         // and wrote an unreferenced tree+commit into .git/objects on every git tick that a
         // still-open turn tab refreshed on.
         guard let target = to else {
-            var diff = run(["-c", "core.quotePath=false", "diff", "--no-color", from], in: repoRoot) ?? ""
+            var args = ["-c", "core.quotePath=false", "diff", "--no-color", from]
+            if let path { args += ["--", path] }   // the two-commit branch below always did; this one forgot
+            var diff = run(args, in: repoRoot) ?? ""
             let untracked = run(["-c", "core.quotePath=false", "ls-files", "--others",
                                  "--exclude-standard", "-z"], in: repoRoot) ?? ""
             for file in untracked.split(separator: "\0").map(String.init) {

@@ -9,7 +9,7 @@ A thin, synchronous Swift wrapper over the `git` command-line tool — repositor
 - 👻 **Inline-diff phantom rows** — `Git.removedLines(for:repoRoot:)` returns deleted lines keyed by the surviving line they belong above, for Cursor-style inline diffs
 - ➕➖ **Working-tree diff stat** — `Git.diffStat(repoRoot:)` sums total insertions/deletions vs `HEAD` (`git diff --numstat`), for a "+312 −332" badge; `WorktreeSummary` carries these per worktree
 - 🧾 **Fast single-line blame** — `Git.blame(for:line:repoRoot:)` returns author, a short relative age, and the commit summary
-- ✅ **Staging actions** — `stage`, `unstage`, and a destructive `discard` (revert-to-HEAD or delete-untracked)
+- ✅ **Staging actions** — `stage`, `unstage`, and a destructive `discard` (revert-to-HEAD, or move an untracked file to the Trash)
 - 🧭 **Repo discovery** — `Git.repoRoot(for:)` and repo-relative path resolution
 - 🌿 **Branch identity** — `Git.currentBranch(repoRoot:)` returns the checked-out branch name, falling back to the short commit SHA on a detached `HEAD`
 - 🌳 **Worktree enumeration** — `Git.worktrees(repoRoot:)` lists every `GitWorktree` (path, branch, main/linked) via `git worktree list --porcelain`, with `isCurrent(relativeTo:)` for symlink-safe "which one am I in?" checks
@@ -84,7 +84,7 @@ Git.executable = "/opt/homebrew/bin/git"
 ## Notes
 
 - All calls are **synchronous** and cheap. When scanning a whole repository, dispatch them off the main queue.
-- `discard` is **destructive**: `.untracked` files are removed from disk; all other kinds are checked out from `HEAD`, discarding local edits.
+- `discard` is **destructive**: `.untracked` files are moved to the Trash (a directory — how `git status` lists a nested repository — is refused, never removed); all other kinds are restored from `HEAD`, discarding local edits. Every kind refuses a path outside the repository.
 - Actions like `unstage` (`git restore --staged`) require an existing `HEAD` — i.e. a repository with at least one commit. `currentBranch` likewise returns `nil` on an unborn `HEAD`.
 - Escape hatch: `Git.run(_:in:)` runs any raw `git` invocation and returns its stdout (`nil` on failure).
 
