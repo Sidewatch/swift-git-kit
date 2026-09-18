@@ -36,6 +36,17 @@ repository before it was fixed (the tests below fail against the previous code):
   `testCheckpointDiffAgainstWorkingTreeCanNarrowToOnePath`.
 - `Git.counts(_:)` was dead — `HunkHeader.parse` replaced it — and survived on its own tests. Removed with them.
 
+- **A CRLF file's diff was mis-parsed** (found later the same day, in the CRLF sweep): `lineDiff` and
+  `lineChangesAll` split the diff with `split(separator: "\n")`, and in Swift `"\r\n"` is ONE
+  `Character`, so the content lines of a Windows-authored file were never divided. Measured in a
+  scratch repo: the gutter marks stopped after the FIRST hunk (the second `@@` rode along inside
+  the first hunk's removed text), a two-line deletion ghosted as one row reading `b\r\n-c\r\n`,
+  and the file AFTER a CRLF file in `git diff HEAD` had its hunks filed under the CRLF file's path
+  (its `diff --git` header was swallowed too). Both loops use `components(separatedBy: "\n")`
+  (a UTF-16 split, what `SideBySideDiff` always used) and a ghost row drops its trailing `\r`.
+  Three tests fail against the old parser. Blame's porcelain, `--numstat`, refs and porcelain
+  status carry no CR before their `\n`, so their Character splits stand.
+
 Reviewed and sound: `run` (ProcessRunner drains both streams), `repoRoot`/`relativePathIfUnderRoot`/`canonicalPath`,
 `nestedRepoRoots`, status parsing (rename old-path field skipped), `lineDiff`/`lineChangesAll`/`untrackedDiff`,
 checkpoint create/anchor/prune/sanitise, worktree list/remove, `GitStatusMap` aliases and merge, `HunkHeader`,
@@ -51,3 +62,4 @@ checkpoint create/anchor/prune/sanitise, worktree list/remove, `GitStatusMap` al
 
 - 17 Sep 2026 — full audit (app + all 20 libraries), Claude with David.
 - 18 Sep 2026 — line-by-line logic review (see the section above); 125 tests, ~80 s.
+- 18 Sep 2026 (later) — CRLF sweep across the family: the diff parsers above, Claude with David.

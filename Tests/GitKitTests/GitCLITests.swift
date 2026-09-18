@@ -489,6 +489,50 @@ final class GitKitTests: XCTestCase {
         XCTAssertEqual(removed[2], ["b"])   // "b" ghosts above new line 2 ("c")
     }
 
+    // MARK: - CRLF files (18 Sep 2026)
+
+    /// In Swift `"\r\n"` is ONE `Character`, so a `split(separator: "\n")` over the diff of a CRLF
+    /// file never divided its content lines: a second hunk header rode along inside the first
+    /// hunk's removed text and was never seen.
+    func testLineChangesSeesEveryHunkOfACRLFFile() throws {
+        let root = try makeRepo()
+        let file = root.appendingPathComponent("win.txt")
+        try write("a\r\nb\r\nc\r\nd\r\ne\r\n", to: "win.txt", in: root)
+        _ = Git.stage(file, repoRoot: root)
+        commit("seed", in: root)
+        try write("a\r\nB\r\nc\r\nd\r\nE\r\n", to: "win.txt", in: root)   // two hunks: lines 2 and 5
+        let marks = Git.lineChanges(for: file, repoRoot: root)
+        XCTAssertEqual(marks[2], .modified)
+        XCTAssertEqual(marks[5], .modified, "the second hunk of a CRLF file")
+        XCTAssertNil(marks[3])
+    }
+
+    func testRemovedLinesOfACRLFFileAreOnePerLineWithoutTheCR() throws {
+        let root = try makeRepo()
+        let file = root.appendingPathComponent("win.txt")
+        try write("a\r\nb\r\nc\r\nd\r\n", to: "win.txt", in: root)
+        _ = Git.stage(file, repoRoot: root)
+        commit("seed", in: root)
+        try write("a\r\nd\r\n", to: "win.txt", in: root)   // delete "b" and "c"
+        let removed = Git.removedLines(for: file, repoRoot: root)
+        XCTAssertEqual(removed[2], ["b", "c"], "two ghost rows, neither carrying a carriage return")
+    }
+
+    /// The CRLF file's last content line swallowed the next `diff --git` header, so the following
+    /// file's hunks were attributed to the CRLF file's path.
+    func testLineChangesAllKeepsTheFileAfterACRLFFileOnItsOwnPath() throws {
+        let root = try makeRepo()
+        try write("a\r\nb\r\n", to: "1-win.txt", in: root)
+        try write("x\ny\n", to: "2-unix.txt", in: root)
+        for f in ["1-win.txt", "2-unix.txt"] { _ = Git.stage(root.appendingPathComponent(f), repoRoot: root) }
+        commit("seed", in: root)
+        try write("a\r\nB\r\n", to: "1-win.txt", in: root)
+        try write("x\nY\n", to: "2-unix.txt", in: root)
+        let all = Git.lineChangesAll(repoRoot: root)
+        XCTAssertEqual(all["1-win.txt"], [2: .modified])
+        XCTAssertEqual(all["2-unix.txt"], [2: .modified], "the LF file after a CRLF file keeps its own hunks")
+    }
+
     // MARK: - blame
 
     func testBlameReportsAuthorAndSummary() throws {

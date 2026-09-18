@@ -46,7 +46,11 @@ public extension Git {
         func flush() {
             if !pending.isEmpty { removed[anchor, default: []].append(contentsOf: pending); pending = [] }
         }
-        for line in diff.split(separator: "\n", omittingEmptySubsequences: false) {
+        // `components(separatedBy:)` (a UTF-16 split), never `split(separator: "\n")`: in Swift
+        // `"\r\n"` is ONE Character, so a Character split never divided the content lines of a
+        // CRLF file — a second hunk header rode along inside the first hunk's removed text and
+        // the marks stopped after hunk one (18 Sep 2026).
+        for line in diff.components(separatedBy: "\n") {
             if line.hasPrefix("@@") {
                 flush()
                 inHunk = true
@@ -59,7 +63,11 @@ public extension Git {
                     anchor = hunk.newStart                        // above the first new line
                 }
             } else if inHunk, line.hasPrefix("-") {
-                pending.append(String(line.dropFirst()))   // removed content (even if it starts with "--")
+                // Removed content (even if it starts with "--"). A CRLF file's lines end in `\r`
+                // here; the ghost row shows the text, not the terminator.
+                var text = line.dropFirst()
+                if text.hasSuffix("\r") { text = text.dropLast() }
+                pending.append(String(text))
             }
         }
         flush()
@@ -105,7 +113,10 @@ public extension Git {
             let p = (s.hasPrefix("a/") || s.hasPrefix("b/")) ? s.dropFirst(2) : s
             return String(p)
         }
-        for line in diff.split(separator: "\n", omittingEmptySubsequences: false) {
+        // A UTF-16 split, as in `lineDiff`: with a Character split the CRLF file's last content
+        // line swallowed the next `diff --git` header and the following file's hunks were filed
+        // under the CRLF file's path.
+        for line in diff.components(separatedBy: "\n") {
             if line.hasPrefix("diff --git ") { inHunk = false; aPath = nil; bPath = nil; continue }
             if !inHunk, line.hasPrefix("--- ") { aPath = headerPath(line.dropFirst(4)); continue }
             if !inHunk, line.hasPrefix("+++ ") { bPath = headerPath(line.dropFirst(4)); continue }
