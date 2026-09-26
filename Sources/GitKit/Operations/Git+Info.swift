@@ -9,6 +9,7 @@
 //
 
 import Foundation
+import FoundationExtensions
 
 public extension Git {
 

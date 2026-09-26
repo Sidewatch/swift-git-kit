@@ -9,6 +9,7 @@
 
 import Foundation
 import ProcessRunner
+import FoundationExtensions
 /// A thin wrapper over the `git` command-line tool.
 ///
 /// `Git` is a namespace (a caseless `enum`) — you never instantiate it; call the
