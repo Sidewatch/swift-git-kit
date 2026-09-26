@@ -9,6 +9,7 @@
 
 import Foundation
 import FoundationExtensions
+import ProcessRunner
 
 public extension Git {
 
@@ -30,21 +31,11 @@ public extension Git {
         let trimmedName = name?.trimmed
         if let trimmedName, !trimmedName.isEmpty { args.append(trimmedName) }
 
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: executable)
-        p.arguments = args
-        p.currentDirectoryURL = parent
-        let errPipe = Pipe()
-        p.standardOutput = FileHandle.nullDevice
-        p.standardError = errPipe
-        do { try p.run() } catch {
-            return CloneResult(path: nil, error: "Couldn't launch git: \(error.localizedDescription)")
-        }
-        let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
-        p.waitUntilExit()
-        guard p.terminationStatus == 0 else {
-            let text = (String(data: errData, encoding: .utf8) ?? "").trimmed
-            return CloneResult(path: nil, error: text.isEmpty ? "git clone failed (exit \(p.terminationStatus))" : text)
+        let result = ProcessRunner.run(executable, args, directory: parent, augmentPATH: false)
+        guard result.launched else { return CloneResult(path: nil, error: "Couldn't launch git.") }
+        guard result.succeeded else {
+            let text = result.errorText.trimmed
+            return CloneResult(path: nil, error: text.isEmpty ? "git clone failed (exit \(result.status))" : text)
         }
         let dir = (trimmedName?.isEmpty == false ? trimmedName! : defaultCloneDirectoryName(for: url))
         return CloneResult(path: parent.appendingPathComponent(dir), error: nil)
