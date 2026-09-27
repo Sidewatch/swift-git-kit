@@ -1,10 +1,11 @@
 //
 //  GitChangeKind.swift
-//  SwiftGitCLI
+//  GitKit
 //
 //  The kind of change git reports for a file or an individual line.
 //
 //  Created by David Sherlock on 7/9/26.
+//  Copyright © 2026 ArrayPress Limited. MIT licence.
 //
 
 import Foundation

@@ -1,11 +1,12 @@
 //
 //  Git+Parsing.swift
-//  SwiftGitCLI
+//  GitKit
 //
 //  Internal pure-function parsers shared across operations. Kept at `internal`
 //  access (not `private`) so they can be unit-tested directly.
 //
 //  Created by David Sherlock on 7/9/26.
+//  Copyright © 2026 ArrayPress Limited. MIT licence.
 //
 
 import Foundation

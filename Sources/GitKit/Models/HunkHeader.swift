@@ -1,10 +1,11 @@
 //
 //  HunkHeader.swift
-//  SwiftGitCLI
+//  GitKit
 //
 //  The `@@ -old +new @@` line of a unified diff, parsed once.
 //
 //  Created by David Sherlock on 8/6/26.
+//  Copyright © 2026 ArrayPress Limited. MIT licence.
 //
 
 import Foundation

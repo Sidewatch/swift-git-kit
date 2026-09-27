@@ -5,6 +5,7 @@
 //  The outcome of a clone: the created directory on success, or git's error text.
 //
 //  Created by David Sherlock on 7/21/26.
+//  Copyright © 2026 ArrayPress Limited. MIT licence.
 //
 
 import Foundation

@@ -1,12 +1,13 @@
 //
 //  GitCheckpointTests.swift
-//  Tests for SwiftGitCLI
+//  GitKitTests
 //
 //  Tests for `Git.createCheckpoint` and friends: a dangling commit that includes untracked
 //  files, anchored under `refs/sidewatch/checkpoints`, with no side effect on the worktree,
 //  index or stash.
 //
 //  Created by David Sherlock on 7/25/26.
+//  Copyright © 2026 ArrayPress Limited. MIT licence.
 //
 
 import XCTest

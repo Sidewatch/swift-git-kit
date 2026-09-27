@@ -1,10 +1,11 @@
 //
 //  Git+Status.swift
-//  SwiftGitCLI
+//  GitKit
 //
 //  Working-tree status of changed files.
 //
 //  Created by David Sherlock on 7/9/26.
+//  Copyright © 2026 ArrayPress Limited. MIT licence.
 //
 
 import Foundation

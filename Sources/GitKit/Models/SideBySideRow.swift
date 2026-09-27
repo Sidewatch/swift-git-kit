@@ -5,6 +5,7 @@
 //  One row of a side-by-side diff: a line number, its text, and what the row is.
 //
 //  Created by David Sherlock on 9/6/26.
+//  Copyright © 2026 ArrayPress Limited. MIT licence.
 //
 
 import Foundation

@@ -5,6 +5,7 @@
 //  Tests for the worktree summary: main and feature worktrees, their branches and labels.
 //
 //  Created by David Sherlock on 7/19/26.
+//  Copyright © 2026 ArrayPress Limited. MIT licence.
 //
 
 import XCTest

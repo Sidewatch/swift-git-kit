@@ -5,6 +5,7 @@
 //  Tests for the side-by-side alignment of a unified diff.
 //
 //  Created by David Sherlock on 9/6/26.
+//  Copyright © 2026 ArrayPress Limited. MIT licence.
 //
 
 import XCTest

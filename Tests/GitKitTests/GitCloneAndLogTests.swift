@@ -5,6 +5,7 @@
 //  Tests for `Git.clone` and the log reader against throwaway repositories.
 //
 //  Created by David Sherlock on 7/21/26.
+//  Copyright © 2026 ArrayPress Limited. MIT licence.
 //
 
 import XCTest

@@ -1,11 +1,12 @@
 //
 //  Git+Checkpoint.swift
-//  SwiftGitCLI
+//  GitKit
 //
 //  Non-destructive snapshots of the working tree, so a range of edits can be diffed exactly
 //  rather than inferred.
 //
 //  Created by David Sherlock on 7/25/26.
+//  Copyright © 2026 ArrayPress Limited. MIT licence.
 //
 
 import Foundation

@@ -1,11 +1,12 @@
 //
 //  GitDiffStatRangeTests.swift
-//  GitKit
+//  GitKitTests
 //
 //  Tests for `Git.diffStat(repoRoot:from:to:)`: the line counts for a span between two
 //  commits, and for a commit against the working tree as it stands.
 //
 //  Created by David Sherlock on 9/13/26.
+//  Copyright © 2026 ArrayPress Limited. MIT licence.
 //
 
 import XCTest

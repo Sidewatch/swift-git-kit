@@ -1,10 +1,11 @@
 //
 //  Git+MergeBase.swift
-//  SwiftGitCLI
+//  GitKit
 //
 //  Where the current branch left its base — the anchor for "everything this branch changed".
 //
 //  Created by David Sherlock on 7/25/26.
+//  Copyright © 2026 ArrayPress Limited. MIT licence.
 //
 
 import Foundation

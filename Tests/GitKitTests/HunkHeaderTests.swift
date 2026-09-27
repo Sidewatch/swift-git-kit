@@ -1,11 +1,12 @@
 //
 //  HunkHeaderTests.swift
-//  SwiftGitCLI
+//  GitKitTests
 //
 //  Covers ``HunkHeader``, the unified-diff hunk header parser that replaced three hand-rolled
 //  copies.
 //
 //  Created by David Sherlock on 8/6/26.
+//  Copyright © 2026 ArrayPress Limited. MIT licence.
 //
 
 import XCTest
