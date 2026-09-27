@@ -23,9 +23,10 @@ extension Git {
         defer { try? FileManager.default.removeItem(at: dir) }
         let a = dir.appendingPathComponent("a"), b = dir.appendingPathComponent("b")
         guard (try? old.write(to: a, atomically: true, encoding: .utf8)) != nil,
-              (try? new.write(to: b, atomically: true, encoding: .utf8)) != nil,
-              let text = run(["-c", "core.quotePath=false", "diff", "--no-color", "--no-index", "--", a.path, b.path],
-                             in: dir, allowedStatuses: [1])   // 1 = "they differ"
+            (try? new.write(to: b, atomically: true, encoding: .utf8)) != nil,
+            let text = run(
+                ["-c", "core.quotePath=false", "diff", "--no-color", "--no-index", "--", a.path, b.path],
+                in: dir, allowedStatuses: [1])  // 1 = "they differ"
         else { return "" }
         // git names the temp files — "a/var/…/a", the leading slash dropped under its prefix —
         // and the reader wants the texts' own names.

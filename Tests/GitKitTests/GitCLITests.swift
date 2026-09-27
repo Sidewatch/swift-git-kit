@@ -99,10 +99,12 @@ final class GitKitTests: XCTestCase {
     func testSiblingDirectorySharingTheRootsNamePrefixIsNotUnderRoot() {
         let root = URL(fileURLWithPath: "/tmp/sw-proj")
         let sibling = URL(fileURLWithPath: "/tmp/sw-proj-feature/src/a.swift")
-        XCTAssertNil(Git.relativePathIfUnderRoot(sibling, root: root),
-                     "a sibling worktree must not be treated as inside the root")
-        XCTAssertEqual(Git.relativePath(sibling, root: root), "a.swift",
-                       "and it must fall back to the basename, not a garbled relative path")
+        XCTAssertNil(
+            Git.relativePathIfUnderRoot(sibling, root: root),
+            "a sibling worktree must not be treated as inside the root")
+        XCTAssertEqual(
+            Git.relativePath(sibling, root: root), "a.swift",
+            "and it must fall back to the basename, not a garbled relative path")
     }
 
     /// The root itself is not "a path under the root" — there is no relative path to give,
@@ -124,9 +126,10 @@ final class GitKitTests: XCTestCase {
         // but `standardizedFileURL` only strips `/private` for paths that EXIST —
         // so a deleted file expressed via the `/private` form used to fail the
         // prefix check and fall back to a bare (wrong) filename.
-        let root = try makeRepo()   // git-reported, i.e. `/private/var/...` on macOS
-        try XCTSkipUnless(root.path.hasPrefix("/private/var/"),
-                          "requires the macOS /private/var temp symlink")
+        let root = try makeRepo()  // git-reported, i.e. `/private/var/...` on macOS
+        try XCTSkipUnless(
+            root.path.hasPrefix("/private/var/"),
+            "requires the macOS /private/var temp symlink")
         let sub = root.appendingPathComponent("sub", isDirectory: true)
         try FileManager.default.createDirectory(at: sub, withIntermediateDirectories: true)
         try write("x", to: "sub/config.json", in: root)
@@ -163,7 +166,7 @@ final class GitKitTests: XCTestCase {
         let status = Git.status(repoRoot: root)
         XCTAssertEqual(Set(status.map(\.path)), ["NewFeature/a.swift", "NewFeature/b.swift"])
         XCTAssertTrue(status.allSatisfy { $0.kind == .untracked })
-        XCTAssertFalse(status.contains { $0.path.hasSuffix("/") })   // no directory entries
+        XCTAssertFalse(status.contains { $0.path.hasSuffix("/") })  // no directory entries
     }
 
     func testStatusModified() throws {
@@ -200,10 +203,10 @@ final class GitKitTests: XCTestCase {
         try write("stable contents that git can match on rename\n", to: "old.txt", in: root)
         _ = Git.stage(root.appendingPathComponent("old.txt"), repoRoot: root)
         commit("add old", in: root)
-        _ = Git.run(["mv", "old.txt", "new.txt"], in: root)   // git mv stages the rename
+        _ = Git.run(["mv", "old.txt", "new.txt"], in: root)  // git mv stages the rename
         let renamed = Git.status(repoRoot: root).first
         XCTAssertEqual(renamed?.kind, .renamed)
-        XCTAssertEqual(renamed?.path, "new.txt")   // new path, not "old.txt -> new.txt"
+        XCTAssertEqual(renamed?.path, "new.txt")  // new path, not "old.txt -> new.txt"
     }
 
     func testStatusPathWithSpacesIsNotQuoted() throws {
@@ -224,8 +227,9 @@ final class GitKitTests: XCTestCase {
         try write("hello", to: "café.txt", in: root)
         let status = Git.status(repoRoot: root)
         XCTAssertEqual(status.count, 1)
-        XCTAssertEqual(status.first?.path.precomposedStringWithCanonicalMapping,
-                       "café.txt".precomposedStringWithCanonicalMapping)
+        XCTAssertEqual(
+            status.first?.path.precomposedStringWithCanonicalMapping,
+            "café.txt".precomposedStringWithCanonicalMapping)
         XCTAssertEqual(status.first?.kind, .untracked)
     }
 
@@ -282,8 +286,9 @@ final class GitKitTests: XCTestCase {
         let trash = try XCTUnwrap(FileManager.default.urls(for: .trashDirectory, in: .userDomainMask).first)
         let landed = trash.appendingPathComponent(name)
         defer { try? FileManager.default.removeItem(at: landed) }
-        XCTAssertEqual(try String(contentsOf: landed, encoding: .utf8), "recoverable",
-                       "the discarded file should be in \(trash.path)")
+        XCTAssertEqual(
+            try String(contentsOf: landed, encoding: .utf8), "recoverable",
+            "the discarded file should be in \(trash.path)")
     }
 
     func testDiscardUntrackedRefusesAFileOutsideTheRepo() throws {
@@ -355,12 +360,16 @@ final class GitKitTests: XCTestCase {
         _ = Git.run(["mv", "old.txt", "renamed.txt"], in: root)
         XCTAssertEqual(Git.status(repoRoot: root).first?.kind, .renamed)
 
-        XCTAssertTrue(Git.discard(root.appendingPathComponent("renamed.txt"),
-                                  kind: .renamed, repoRoot: root))
+        XCTAssertTrue(
+            Git.discard(
+                root.appendingPathComponent("renamed.txt"),
+                kind: .renamed, repoRoot: root))
         XCTAssertTrue(Git.status(repoRoot: root).isEmpty)
         XCTAssertFalse(FileManager.default.fileExists(atPath: root.appendingPathComponent("renamed.txt").path))
-        XCTAssertEqual(try String(contentsOf: root.appendingPathComponent("old.txt"),
-                                  encoding: .utf8), "contents\n")
+        XCTAssertEqual(
+            try String(
+                contentsOf: root.appendingPathComponent("old.txt"),
+                encoding: .utf8), "contents\n")
     }
 
     func testDiscardRenameWithSpacedPaths() throws {
@@ -370,11 +379,15 @@ final class GitKitTests: XCTestCase {
         commit("seed", in: root)
         _ = Git.run(["mv", "old name.txt", "new name.txt"], in: root)
 
-        XCTAssertTrue(Git.discard(root.appendingPathComponent("new name.txt"),
-                                  kind: .renamed, repoRoot: root))
+        XCTAssertTrue(
+            Git.discard(
+                root.appendingPathComponent("new name.txt"),
+                kind: .renamed, repoRoot: root))
         XCTAssertTrue(Git.status(repoRoot: root).isEmpty)
-        XCTAssertEqual(try String(contentsOf: root.appendingPathComponent("old name.txt"),
-                                  encoding: .utf8), "contents\n")
+        XCTAssertEqual(
+            try String(
+                contentsOf: root.appendingPathComponent("old name.txt"),
+                encoding: .utf8), "contents\n")
     }
 
     func testDiscardRefusesFileOutsideRepoAndDoesNotClobberSameNamedRootFile() throws {
@@ -393,8 +406,10 @@ final class GitKitTests: XCTestCase {
         XCTAssertFalse(Git.stage(outside, repoRoot: root))
         XCTAssertFalse(Git.unstage(outside, repoRoot: root))
         // The unrelated root-level file's edits must survive.
-        XCTAssertEqual(try String(contentsOf: root.appendingPathComponent("config.json"),
-                                  encoding: .utf8), "precious local edits\n")
+        XCTAssertEqual(
+            try String(
+                contentsOf: root.appendingPathComponent("config.json"),
+                encoding: .utf8), "precious local edits\n")
     }
 
     func testDiscardDeletedFileViaUnresolvedSymlinkFormRestoresRightFile() throws {
@@ -402,8 +417,9 @@ final class GitKitTests: XCTestCase {
         // DELETED sub/config.json used to fall back to the "config.json" pathspec,
         // reverting the root-level config.json instead of restoring the deletion.
         let root = try makeRepo()
-        try XCTSkipUnless(root.path.hasPrefix("/private/var/"),
-                          "requires the macOS /private/var temp symlink")
+        try XCTSkipUnless(
+            root.path.hasPrefix("/private/var/"),
+            "requires the macOS /private/var temp symlink")
         let sub = root.appendingPathComponent("sub", isDirectory: true)
         try FileManager.default.createDirectory(at: sub, withIntermediateDirectories: true)
         try write("root original\n", to: "config.json", in: root)
@@ -416,10 +432,14 @@ final class GitKitTests: XCTestCase {
 
         let deleted = URL(fileURLWithPath: root.path + "/sub/config.json")
         XCTAssertTrue(Git.discard(deleted, kind: .deleted, repoRoot: root))
-        XCTAssertEqual(try String(contentsOf: sub.appendingPathComponent("config.json"),
-                                  encoding: .utf8), "sub original\n")   // restored
-        XCTAssertEqual(try String(contentsOf: root.appendingPathComponent("config.json"),
-                                  encoding: .utf8), "root local edits\n")   // untouched
+        XCTAssertEqual(
+            try String(
+                contentsOf: sub.appendingPathComponent("config.json"),
+                encoding: .utf8), "sub original\n")  // restored
+        XCTAssertEqual(
+            try String(
+                contentsOf: root.appendingPathComponent("config.json"),
+                encoding: .utf8), "root local edits\n")  // untouched
     }
 
     // MARK: - lineChanges
@@ -472,7 +492,7 @@ final class GitKitTests: XCTestCase {
         for f in ["one.txt", "two.txt", "gone.txt"] {
             XCTAssertEqual(all[f], Git.lineChanges(for: root.appendingPathComponent(f), repoRoot: root), f)
         }
-        XCTAssertNil(all["new.txt"])   // untracked: absent, like the per-file call's [:]
+        XCTAssertNil(all["new.txt"])  // untracked: absent, like the per-file call's [:]
         XCTAssertEqual(all["one.txt"]?[2], .modified)
         XCTAssertEqual(all["one.txt"]?[4], .added)
     }
@@ -485,9 +505,9 @@ final class GitKitTests: XCTestCase {
         try write("a\nb\nc\n", to: "code.txt", in: root)
         _ = Git.stage(file, repoRoot: root)
         commit("seed", in: root)
-        try write("a\nc\n", to: "code.txt", in: root)   // delete "b"
+        try write("a\nc\n", to: "code.txt", in: root)  // delete "b"
         let removed = Git.removedLines(for: file, repoRoot: root)
-        XCTAssertEqual(removed[2], ["b"])   // "b" ghosts above new line 2 ("c")
+        XCTAssertEqual(removed[2], ["b"])  // "b" ghosts above new line 2 ("c")
     }
 
     // MARK: - CRLF files
@@ -501,7 +521,7 @@ final class GitKitTests: XCTestCase {
         try write("a\r\nb\r\nc\r\nd\r\ne\r\n", to: "win.txt", in: root)
         _ = Git.stage(file, repoRoot: root)
         commit("seed", in: root)
-        try write("a\r\nB\r\nc\r\nd\r\nE\r\n", to: "win.txt", in: root)   // two hunks: lines 2 and 5
+        try write("a\r\nB\r\nc\r\nd\r\nE\r\n", to: "win.txt", in: root)  // two hunks: lines 2 and 5
         let marks = Git.lineChanges(for: file, repoRoot: root)
         XCTAssertEqual(marks[2], .modified)
         XCTAssertEqual(marks[5], .modified, "the second hunk of a CRLF file")
@@ -514,7 +534,7 @@ final class GitKitTests: XCTestCase {
         try write("a\r\nb\r\nc\r\nd\r\n", to: "win.txt", in: root)
         _ = Git.stage(file, repoRoot: root)
         commit("seed", in: root)
-        try write("a\r\nd\r\n", to: "win.txt", in: root)   // delete "b" and "c"
+        try write("a\r\nd\r\n", to: "win.txt", in: root)  // delete "b" and "c"
         let removed = Git.removedLines(for: file, repoRoot: root)
         XCTAssertEqual(removed[2], ["b", "c"], "two ghost rows, neither carrying a carriage return")
     }
@@ -585,11 +605,11 @@ final class GitKitTests: XCTestCase {
         XCTAssertNotNil(Git.run(["checkout", "-q", "--detach", "HEAD"], in: root))
         let branch = Git.currentBranch(repoRoot: root)
         XCTAssertEqual(branch, sha)
-        XCTAssertNotEqual(branch, "HEAD")   // the literal detached marker must never leak out
+        XCTAssertNotEqual(branch, "HEAD")  // the literal detached marker must never leak out
     }
 
     func testCurrentBranchNilForUnbornHead() throws {
-        let root = try makeRepo()   // no commits yet — HEAD is unborn, rev-parse fails
+        let root = try makeRepo()  // no commits yet — HEAD is unborn, rev-parse fails
         XCTAssertNil(Git.currentBranch(repoRoot: root))
     }
 
@@ -600,15 +620,17 @@ final class GitKitTests: XCTestCase {
         commit("seed", in: root)
         XCTAssertNotNil(Git.run(["checkout", "-q", "-b", "main-branch"], in: root))
         let linkedPath = worktreeScratchPath("linked")
-        XCTAssertNotNil(Git.run(["worktree", "add", "-q", linkedPath.path, "-b", "wt-branch"],
-                                in: root))
+        XCTAssertNotNil(
+            Git.run(
+                ["worktree", "add", "-q", linkedPath.path, "-b", "wt-branch"],
+                in: root))
 
         let trees = Git.worktrees(repoRoot: root)
         XCTAssertEqual(trees.count, 2)
 
         let main = try XCTUnwrap(trees.first)
         XCTAssertTrue(main.isMain)
-        XCTAssertEqual(main.branch, "main-branch")   // refs/heads/ prefix stripped
+        XCTAssertEqual(main.branch, "main-branch")  // refs/heads/ prefix stripped
         XCTAssertTrue(main.isCurrent(relativeTo: root))
 
         let linked = try XCTUnwrap(trees.last)
@@ -626,14 +648,16 @@ final class GitKitTests: XCTestCase {
         _ = Git.stage(root.appendingPathComponent("f.txt"), repoRoot: root)
         commit("seed", in: root)
         let linkedPath = worktreeScratchPath("inside")
-        XCTAssertNotNil(Git.run(["worktree", "add", "-q", linkedPath.path, "-b", "wt-inside"],
-                                in: root))
+        XCTAssertNotNil(
+            Git.run(
+                ["worktree", "add", "-q", linkedPath.path, "-b", "wt-inside"],
+                in: root))
 
         // repoRoot from inside the linked worktree reports the LINKED root.
         let linkedRoot = try XCTUnwrap(Git.repoRoot(for: linkedPath))
         let trees = Git.worktrees(repoRoot: linkedRoot)
         XCTAssertEqual(trees.count, 2)
-        XCTAssertTrue(trees[0].isMain)                              // main still listed first
+        XCTAssertTrue(trees[0].isMain)  // main still listed first
         XCTAssertFalse(trees[0].isCurrent(relativeTo: linkedRoot))
         XCTAssertTrue(trees[1].isCurrent(relativeTo: linkedRoot))
         XCTAssertEqual(Git.currentBranch(repoRoot: linkedRoot), "wt-inside")
@@ -645,13 +669,15 @@ final class GitKitTests: XCTestCase {
         _ = Git.stage(root.appendingPathComponent("f.txt"), repoRoot: root)
         commit("seed", in: root)
         let linkedPath = worktreeScratchPath("detached")
-        XCTAssertNotNil(Git.run(["worktree", "add", "-q", "--detach", linkedPath.path],
-                                in: root))
+        XCTAssertNotNil(
+            Git.run(
+                ["worktree", "add", "-q", "--detach", linkedPath.path],
+                in: root))
 
         let trees = Git.worktrees(repoRoot: root)
         XCTAssertEqual(trees.count, 2)
-        XCTAssertNotNil(trees[0].branch)   // main is on a real branch
-        XCTAssertNil(trees[1].branch)      // detached entry has no branch line
+        XCTAssertNotNil(trees[0].branch)  // main is on a real branch
+        XCTAssertNil(trees[1].branch)  // detached entry has no branch line
     }
 
     // MARK: - run
@@ -670,7 +696,8 @@ final class GitKitTests: XCTestCase {
         defer { Git.executable = saved }
         Git.executable = "/bin/sh"
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
-        let out = Git.run(["-c", "i=0; while [ $i -lt 4096 ]; do echo 'stderr noise stderr noise stderr noise' 1>&2; i=$((i+1)); done; echo ok"], in: dir)
+        let out = Git.run(
+            ["-c", "i=0; while [ $i -lt 4096 ]; do echo 'stderr noise stderr noise stderr noise' 1>&2; i=$((i+1)); done; echo ok"], in: dir)
         XCTAssertEqual(out, "ok\n")
     }
 

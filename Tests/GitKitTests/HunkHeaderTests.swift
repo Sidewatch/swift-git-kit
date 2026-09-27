@@ -33,27 +33,33 @@ final class HunkHeaderTests: XCTestCase {
     }
 
     func testMixedShorthandAndExplicitCount() {
-        XCTAssertEqual(HunkHeader.parse("@@ -5 +9,4 @@"),
-                       HunkHeader(oldStart: 5, oldCount: 1, newStart: 9, newCount: 4))
-        XCTAssertEqual(HunkHeader.parse("@@ -5,2 +9 @@"),
-                       HunkHeader(oldStart: 5, oldCount: 2, newStart: 9, newCount: 1))
+        XCTAssertEqual(
+            HunkHeader.parse("@@ -5 +9,4 @@"),
+            HunkHeader(oldStart: 5, oldCount: 1, newStart: 9, newCount: 4))
+        XCTAssertEqual(
+            HunkHeader.parse("@@ -5,2 +9 @@"),
+            HunkHeader(oldStart: 5, oldCount: 2, newStart: 9, newCount: 1))
     }
 
     /// `git diff` appends the enclosing function/section after the closing `@@`. It is
     /// free-form text and must not disturb the parse — including when it contains spaces
     /// or its own `@@`.
     func testIgnoresTrailingSectionHeading() {
-        XCTAssertEqual(HunkHeader.parse("@@ -1,2 +3,4 @@ func doThing(a: Int) -> String {"),
-                       HunkHeader(oldStart: 1, oldCount: 2, newStart: 3, newCount: 4))
-        XCTAssertEqual(HunkHeader.parse("@@ -1,2 +3,4 @@ weird @@ heading"),
-                       HunkHeader(oldStart: 1, oldCount: 2, newStart: 3, newCount: 4))
+        XCTAssertEqual(
+            HunkHeader.parse("@@ -1,2 +3,4 @@ func doThing(a: Int) -> String {"),
+            HunkHeader(oldStart: 1, oldCount: 2, newStart: 3, newCount: 4))
+        XCTAssertEqual(
+            HunkHeader.parse("@@ -1,2 +3,4 @@ weird @@ heading"),
+            HunkHeader(oldStart: 1, oldCount: 2, newStart: 3, newCount: 4))
     }
 
     // MARK: - Rejection
 
     func testRejectsNonHeaderLines() {
-        for line in ["", " ", "+added", "-removed", " context",
-                     "diff --git a/x b/x", "--- a/x", "+++ b/x", "@@", "@@ -1,2 @@"] {
+        for line in [
+            "", " ", "+added", "-removed", " context",
+            "diff --git a/x b/x", "--- a/x", "+++ b/x", "@@", "@@ -1,2 @@",
+        ] {
             XCTAssertNil(HunkHeader.parse(line), "should reject \(line.debugDescription)")
         }
     }
@@ -118,7 +124,8 @@ final class HunkHeaderTests: XCTestCase {
     func testAcceptsSubstring() {
         let diff = "@@ -1,2 +3,4 @@\n+added\n"
         let first = diff.split(separator: "\n", omittingEmptySubsequences: false)[0]
-        XCTAssertEqual(HunkHeader.parse(first),
-                       HunkHeader(oldStart: 1, oldCount: 2, newStart: 3, newCount: 4))
+        XCTAssertEqual(
+            HunkHeader.parse(first),
+            HunkHeader(oldStart: 1, oldCount: 2, newStart: 3, newCount: 4))
     }
 }

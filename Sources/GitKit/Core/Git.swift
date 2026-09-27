@@ -56,12 +56,15 @@ public enum Git {
     /// Goes through ``ProcessRunner``, which drains stdout and stderr concurrently: an undrained
     /// stderr pipe deadlocks once git writes ~64 KB of warnings. stderr is then dropped; callers
     /// want output or `nil`.
-    public static func run(_ args: [String], in dir: URL,
-                           environment: [String: String],
-                           allowedStatuses: Set<Int32> = []) -> String? {
-        let result = ProcessRunner.run(executable, args,
-                                    directory: dir,
-                                    environment: environment)
+    public static func run(
+        _ args: [String], in dir: URL,
+        environment: [String: String],
+        allowedStatuses: Set<Int32> = []
+    ) -> String? {
+        let result = ProcessRunner.run(
+            executable, args,
+            directory: dir,
+            environment: environment)
         guard result.launched else { return nil }
         guard result.status == 0 || allowedStatuses.contains(result.status) else { return nil }
         return result.outputText
@@ -73,8 +76,10 @@ public enum Git {
     ///   directory is searched.
     public static func repoRoot(for dir: URL) -> URL? {
         let base = dir.hasDirectoryPath ? dir : dir.deletingLastPathComponent()
-        guard let out = run(["rev-parse", "--show-toplevel"], in: base)?
-            .trimmed, !out.isEmpty else { return nil }
+        guard
+            let out = run(["rev-parse", "--show-toplevel"], in: base)?
+                .trimmed, !out.isEmpty
+        else { return nil }
         return URL(fileURLWithPath: out)
     }
 
@@ -84,11 +89,16 @@ public enum Git {
     ///
     /// For folders that are not a repo but hold checkouts (a WordPress site's plugins). A repo
     /// inside a repo is still returned: its own status is the truth for its files. Walks the disk.
-    public static func nestedRepoRoots(under root: URL, skipping skip: Set<String>,
-                                       maxDepth: Int = 6, limit: Int = 64) -> [URL] {
+    public static func nestedRepoRoots(
+        under root: URL, skipping skip: Set<String>,
+        maxDepth: Int = 6, limit: Int = 64
+    ) -> [URL] {
         let fm = FileManager.default
-        guard let en = fm.enumerator(at: root, includingPropertiesForKeys: [.isDirectoryKey],
-                                     options: [.skipsPackageDescendants]) else { return [] }
+        guard
+            let en = fm.enumerator(
+                at: root, includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsPackageDescendants])
+        else { return [] }
         let rootPath = root.standardizedFileURL.path
         var out: [URL] = []
         for case let url as URL in en {

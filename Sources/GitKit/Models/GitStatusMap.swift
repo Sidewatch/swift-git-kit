@@ -82,7 +82,7 @@ public struct GitStatusMap: Equatable, Sendable {
             if !isDirEntry { canonical.append(canonicalRoot + "/" + path) }
             for root in roots {
                 if isDirEntry {
-                    dirs.insert(root + "/" + path)   // the untracked folder itself gets a dot
+                    dirs.insert(root + "/" + path)  // the untracked folder itself gets a dot
                 } else {
                     kinds[root + "/" + path] = entry.kind
                 }
@@ -91,7 +91,7 @@ public struct GitStatusMap: Equatable, Sendable {
                     dirs.insert(root + "/" + dir)
                     dir = (dir as NSString).deletingLastPathComponent
                 }
-                dirs.insert(root)   // the root folder itself contains changes
+                dirs.insert(root)  // the root folder itself contains changes
             }
         }
         return GitStatusMap(kinds: kinds, changedDirs: dirs, canonicalPaths: canonical.sorted())

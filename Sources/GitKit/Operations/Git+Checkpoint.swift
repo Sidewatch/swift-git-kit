@@ -45,13 +45,15 @@ public extension Git {
         // A repo with no commits has no HEAD; there is nothing to seed from, which is correct.
         _ = run(["read-tree", "HEAD"], in: repoRoot, environment: env)
         guard run(["add", "-A"], in: repoRoot, environment: env) != nil,
-              let tree = trimmed(run(["write-tree"], in: repoRoot, environment: env))
+            let tree = trimmed(run(["write-tree"], in: repoRoot, environment: env))
         else { return nil }
 
         // An identity is required to write a commit object, and the repo may not configure one
         // (or may configure one we shouldn't borrow). These -c flags apply to this call only.
-        var args = ["-c", "user.name=Sidewatch", "-c", "user.email=checkpoint@sidewatch.local",
-                    "commit-tree", tree, "-m", "sidewatch checkpoint"]
+        var args = [
+            "-c", "user.name=Sidewatch", "-c", "user.email=checkpoint@sidewatch.local",
+            "commit-tree", tree, "-m", "sidewatch checkpoint",
+        ]
         // Parent on HEAD when there is one — a repository with no commits yet has none, and
         // passing `-p` with an empty value fails outright.
         if let head = trimmed(run(["rev-parse", "HEAD"], in: repoRoot)) { args += ["-p", head] }
@@ -83,8 +85,11 @@ public extension Git {
     /// - Parameter repoRoot: The repository to list.
     /// - Returns: Pairs of checkpoint id and commit SHA.
     static func checkpoints(repoRoot: URL) -> [(id: String, commit: String)] {
-        guard let out = run(["for-each-ref", "--format=%(refname)%09%(objectname)", checkpointRefPrefix],
-                            in: repoRoot) else { return [] }
+        guard
+            let out = run(
+                ["for-each-ref", "--format=%(refname)%09%(objectname)", checkpointRefPrefix],
+                in: repoRoot)
+        else { return [] }
         return out.split(separator: "\n").compactMap { line in
             let parts = line.components(separatedBy: "\t")
             guard parts.count == 2, parts[0].hasPrefix(checkpointRefPrefix) else { return nil }
@@ -100,10 +105,14 @@ public extension Git {
         // snapshot: that re-hashes the whole tree and writes objects on every refresh.
         guard let target = to else {
             var args = ["-c", "core.quotePath=false", "diff", "--no-color", from]
-            if let path { args += ["--", path] }   // narrowed like the two-commit branch below
+            if let path { args += ["--", path] }  // narrowed like the two-commit branch below
             var diff = run(args, in: repoRoot) ?? ""
-            let untracked = run(["-c", "core.quotePath=false", "ls-files", "--others",
-                                 "--exclude-standard", "-z"], in: repoRoot) ?? ""
+            let untracked =
+                run(
+                    [
+                        "-c", "core.quotePath=false", "ls-files", "--others",
+                        "--exclude-standard", "-z",
+                    ], in: repoRoot) ?? ""
             for file in untracked.split(separator: "\0").map(String.init) {
                 if let path, file != path { continue }
                 diff += untrackedDiff(for: repoRoot.appendingPathComponent(file), repoRoot: repoRoot)
@@ -118,22 +127,36 @@ public extension Git {
     /// The repo-relative files changed from checkpoint `from` to `to` (or the live working tree
     /// when nil), with their kind, in git's order — what a turn actually touched, not what the
     /// transcript says it touched.
-    static func checkpointChangedFiles(from: String, to: String?,
-                                       repoRoot: URL) -> [(path: String, kind: GitChangeKind)] {
+    static func checkpointChangedFiles(
+        from: String, to: String?,
+        repoRoot: URL
+    ) -> [(path: String, kind: GitChangeKind)] {
         // Same reasoning as `checkpointDiff`: compare against the working tree directly and add
         // untracked files, instead of hashing the whole tree into a throwaway commit.
         guard let target = to else {
-            var files = changedFiles(rawNameStatus: run(["-c", "core.quotePath=false", "diff",
-                                                         "--name-status", from], in: repoRoot))
-            let untracked = run(["-c", "core.quotePath=false", "ls-files", "--others",
-                                 "--exclude-standard", "-z"], in: repoRoot) ?? ""
+            var files = changedFiles(
+                rawNameStatus: run(
+                    [
+                        "-c", "core.quotePath=false", "diff",
+                        "--name-status", from,
+                    ], in: repoRoot))
+            let untracked =
+                run(
+                    [
+                        "-c", "core.quotePath=false", "ls-files", "--others",
+                        "--exclude-standard", "-z",
+                    ], in: repoRoot) ?? ""
             files += untracked.split(separator: "\0").map { (path: String($0), kind: GitChangeKind.added) }
             return files
         }
         // core.quotePath=false: without it a path with non-ASCII characters comes back C-quoted
         // ("\303\251"), which no caller can open.
-        return changedFiles(rawNameStatus: run(["-c", "core.quotePath=false", "diff",
-                                                "--name-status", from, target], in: repoRoot))
+        return changedFiles(
+            rawNameStatus: run(
+                [
+                    "-c", "core.quotePath=false", "diff",
+                    "--name-status", from, target,
+                ], in: repoRoot))
     }
 
     /// Parses `git diff --name-status` output.
@@ -149,7 +172,7 @@ public extension Git {
             case "A": kind = .added
             case "D": kind = .deleted
             case "R": kind = .renamed
-            default:  kind = .modified
+            default: kind = .modified
             }
             return (path, kind)
         }
@@ -160,8 +183,13 @@ public extension Git {
     @discardableResult
     static func pruneCheckpoints(keeping: Int, repoRoot: URL) -> [String] {
         // Newest first, so everything past the keep count is the tail to drop.
-        guard let out = run(["for-each-ref", "--sort=-committerdate", "--format=%(refname)",
-                             checkpointRefPrefix], in: repoRoot) else { return [] }
+        guard
+            let out = run(
+                [
+                    "for-each-ref", "--sort=-committerdate", "--format=%(refname)",
+                    checkpointRefPrefix,
+                ], in: repoRoot)
+        else { return [] }
         let refs = out.split(separator: "\n").map(String.init)
         let doomed = refs.dropFirst(max(0, keeping))
         var dropped: [String] = []

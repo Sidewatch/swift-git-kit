@@ -31,11 +31,17 @@ public extension Git {
             // Rename/copy entries carry the OLD path as the next NUL field — skip it.
             if code.contains("R") || code.contains("C") { i += 1 }
             let kind: GitChangeKind
-            if code.contains("?") { kind = .untracked }
-            else if code.contains("A") { kind = .added }
-            else if code.contains("D") { kind = .deleted }
-            else if code.contains("R") { kind = .renamed }
-            else { kind = .modified }
+            if code.contains("?") {
+                kind = .untracked
+            } else if code.contains("A") {
+                kind = .added
+            } else if code.contains("D") {
+                kind = .deleted
+            } else if code.contains("R") {
+                kind = .renamed
+            } else {
+                kind = .modified
+            }
             result.append((path, kind))
         }
         return result

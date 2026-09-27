@@ -44,13 +44,16 @@ final class GitStatusMapTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: aliasedRoot) }
         let std = aliasedRoot.standardizedFileURL.path
         let resolved = (std as NSString).resolvingSymlinksInPath
-        try XCTSkipIf(std == resolved && !FileManager.default.fileExists(atPath: "/private" + std),
-                      "root does not alias on this system")
+        try XCTSkipIf(
+            std == resolved && !FileManager.default.fileExists(atPath: "/private" + std),
+            "root does not alias on this system")
 
-        let map = GitStatusMap.build(status: [("src/a.swift", .modified), ("b.swift", .added)],
-                                     repoRoot: aliasedRoot)
-        XCTAssertEqual(map.changedFilePaths.count, 2,
-                       "one entry per FILE, not per root alias: \(map.changedFilePaths)")
+        let map = GitStatusMap.build(
+            status: [("src/a.swift", .modified), ("b.swift", .added)],
+            repoRoot: aliasedRoot)
+        XCTAssertEqual(
+            map.changedFilePaths.count, 2,
+            "one entry per FILE, not per root alias: \(map.changedFilePaths)")
         for p in map.changedFilePaths {
             XCTAssertNotNil(map.kind(for: URL(fileURLWithPath: p)), p)
         }
@@ -67,13 +70,13 @@ final class GitStatusMapTests: XCTestCase {
         XCTAssertTrue(map.directoryContainsChanges(root.appendingPathComponent("a")))
         XCTAssertTrue(map.directoryContainsChanges(root.appendingPathComponent("a/b")))
         XCTAssertTrue(map.directoryContainsChanges(root.appendingPathComponent("a/b/c")))
-        XCTAssertTrue(map.directoryContainsChanges(root))          // root itself
+        XCTAssertTrue(map.directoryContainsChanges(root))  // root itself
         XCTAssertFalse(map.directoryContainsChanges(root.appendingPathComponent("z")))
     }
 
     func testDeletedFilesExcluded() {
         let map = GitStatusMap.build(status: [("gone.swift", .deleted)], repoRoot: root)
-        XCTAssertEqual(map, .empty)                                 // only deletion → empty
+        XCTAssertEqual(map, .empty)  // only deletion → empty
         XCTAssertNil(map.kind(for: root.appendingPathComponent("gone.swift")))
     }
 
@@ -106,8 +109,7 @@ final class GitStatusMapTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: realRoot) }
 
         let map = GitStatusMap.build(status: [("f.swift", .modified)], repoRoot: realRoot)
-        let stripped = URL(fileURLWithPath:
-            (realRoot.path as NSString).resolvingSymlinksInPath).appendingPathComponent("f.swift")
+        let stripped = URL(fileURLWithPath: (realRoot.path as NSString).resolvingSymlinksInPath).appendingPathComponent("f.swift")
         XCTAssertEqual(map.kind(for: stripped), .modified)
     }
 }

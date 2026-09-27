@@ -62,7 +62,8 @@ public extension Git {
     static func trashUntracked(_ file: URL) -> URL? {
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: file.path, isDirectory: &isDirectory),
-              !isDirectory.boolValue else { return nil }
+            !isDirectory.boolValue
+        else { return nil }
         var trashed: NSURL?
         do { try FileManager.default.trashItem(at: file, resultingItemURL: &trashed) } catch { return nil }
         return trashed as URL?

@@ -11,19 +11,21 @@ let package = Package(
         // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
             name: "GitKit",
-            targets: ["GitKit"]),
+            targets: ["GitKit"])
     ],
     dependencies: [
         // The shared subprocess runner. GitKit used to hand-roll two near-identical
         // Process/Pipe runners; the drain-both-streams contract lives in one place now.
-        .package(path: "../swift-foundation-extensions"),
+        .package(path: "../swift-foundation-extensions")
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         .target(
             name: "GitKit",
-            dependencies: [.product(name: "ProcessRunner", package: "swift-foundation-extensions"),
-                           .product(name: "FoundationExtensions", package: "swift-foundation-extensions")],
+            dependencies: [
+                .product(name: "ProcessRunner", package: "swift-foundation-extensions"),
+                .product(name: "FoundationExtensions", package: "swift-foundation-extensions"),
+            ],
             path: "Sources",
             resources: [.process("GitKit/Localizable.xcstrings")],
             swiftSettings: [.swiftLanguageMode(.v6)]

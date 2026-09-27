@@ -33,8 +33,9 @@ final class NestedRepoTests: XCTestCase {
     }
 
     private func found(skipping: Set<String> = ["node_modules", "vendor"], maxDepth: Int = 6) -> Set<String> {
-        Set(Git.nestedRepoRoots(under: tmp, skipping: skipping, maxDepth: maxDepth)
-            .map { $0.standardizedFileURL.path.replacingOccurrences(of: tmp.standardizedFileURL.path + "/", with: "") })
+        Set(
+            Git.nestedRepoRoots(under: tmp, skipping: skipping, maxDepth: maxDepth)
+                .map { $0.standardizedFileURL.path.replacingOccurrences(of: tmp.standardizedFileURL.path + "/", with: "") })
     }
 
     /// The WordPress shape: plugins and libraries are checkouts inside a folder that is
@@ -43,8 +44,9 @@ final class NestedRepoTests: XCTestCase {
     func testFindsCheckoutsBelowTheRoot() throws {
         try mkdir("wp-content/plugins/edd/.git")
         try mkdir("libraries/field-kit")
-        try "gitdir: /elsewhere/.git/worktrees/fk\n".write(to: tmp.appendingPathComponent("libraries/field-kit/.git"),
-                                                        atomically: true, encoding: .utf8)
+        try "gitdir: /elsewhere/.git/worktrees/fk\n".write(
+            to: tmp.appendingPathComponent("libraries/field-kit/.git"),
+            atomically: true, encoding: .utf8)
         try mkdir("node_modules/dep/.git")
         try mkdir("wp-content/plugins/edd/vendor/lib/.git")
         try mkdir(".git")
@@ -61,8 +63,8 @@ final class NestedRepoTests: XCTestCase {
 
     /// The depth cap bounds the walk of a big tree; a checkout past it is not found.
     func testDepthCapIsEnforced() throws {
-        try mkdir("a/b/c/.git")                 // level 3
-        try mkdir("d/e/f/g/h/i/j/.git")         // level 7
+        try mkdir("a/b/c/.git")  // level 3
+        try mkdir("d/e/f/g/h/i/j/.git")  // level 7
         XCTAssertEqual(found(maxDepth: 6), ["a/b/c"])
         XCTAssertEqual(found(maxDepth: 8), ["a/b/c", "d/e/f/g/h/i/j"])
     }
@@ -73,24 +75,29 @@ final class NestedRepoTests: XCTestCase {
         let site = URL(fileURLWithPath: "/site")
         // The outer repo sees the whole plugin as untracked — every file in it "??" —
         // while the plugin's own repo knows edd.php is a tracked, MODIFIED file.
-        let outer = GitStatusMap.build(status: [("wp-content/plugins/edd/", .untracked),
-                                                ("wp-content/plugins/edd/edd.php", .untracked),
-                                                ("index.php", .modified)],
-                                       repoRoot: site)
+        let outer = GitStatusMap.build(
+            status: [
+                ("wp-content/plugins/edd/", .untracked),
+                ("wp-content/plugins/edd/edd.php", .untracked),
+                ("index.php", .modified),
+            ],
+            repoRoot: site)
         let plugin = URL(fileURLWithPath: "/site/wp-content/plugins/edd")
         let inner = GitStatusMap.build(status: [("edd.php", .modified), ("new.php", .untracked)], repoRoot: plugin)
         let merged = GitStatusMap.merge([outer, inner], propagatingTo: site)
 
         XCTAssertEqual(merged.kind(for: URL(fileURLWithPath: "/site/index.php")), .modified)
-        XCTAssertEqual(merged.kind(for: URL(fileURLWithPath: "/site/wp-content/plugins/edd/edd.php")), .modified,
-                       "the nested repo's own kind wins over the outer repo's blanket untracked")
+        XCTAssertEqual(
+            merged.kind(for: URL(fileURLWithPath: "/site/wp-content/plugins/edd/edd.php")), .modified,
+            "the nested repo's own kind wins over the outer repo's blanket untracked")
         XCTAssertEqual(merged.kind(for: URL(fileURLWithPath: "/site/wp-content/plugins/edd/new.php")), .untracked)
         XCTAssertTrue(merged.directoryContainsChanges(URL(fileURLWithPath: "/site/wp-content/plugins/edd")))
         XCTAssertTrue(merged.directoryContainsChanges(URL(fileURLWithPath: "/site/wp-content/plugins")), "dots climb to the top")
         XCTAssertTrue(merged.directoryContainsChanges(URL(fileURLWithPath: "/site/wp-content")))
         XCTAssertTrue(merged.directoryContainsChanges(site))
-        XCTAssertEqual(merged.changedFilePaths,
-                       ["/site/index.php", "/site/wp-content/plugins/edd/edd.php", "/site/wp-content/plugins/edd/new.php"])
+        XCTAssertEqual(
+            merged.changedFilePaths,
+            ["/site/index.php", "/site/wp-content/plugins/edd/edd.php", "/site/wp-content/plugins/edd/new.php"])
     }
 
     /// A nested repo alone (the opened folder is no repo) still dots its ancestors up

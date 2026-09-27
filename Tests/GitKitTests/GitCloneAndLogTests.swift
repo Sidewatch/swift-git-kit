@@ -58,7 +58,7 @@ final class GitCloneAndLogTests: XCTestCase {
         seedRepo(root, commits: ["first", "second", "third"])
         let commits = Git.log(repoRoot: root, limit: 10)
         XCTAssertEqual(commits.count, 3)
-        XCTAssertEqual(commits.map(\.subject), ["third", "second", "first"])   // newest first
+        XCTAssertEqual(commits.map(\.subject), ["third", "second", "first"])  // newest first
         XCTAssertEqual(commits.first?.author, "T")
         XCTAssertEqual(commits.first?.shortHash.count ?? 0 >= 7, true)
         XCTAssertFalse(commits.first?.hash.isEmpty ?? true)
@@ -76,8 +76,8 @@ final class GitCloneAndLogTests: XCTestCase {
         let hash = Git.log(repoRoot: root, limit: 1).first!.hash
         let patch = Git.showCommit(hash, repoRoot: root)
         XCTAssertNotNil(patch)
-        XCTAssertTrue(patch!.contains("only"))       // the commit subject
-        XCTAssertTrue(patch!.contains("f0.txt"))     // the changed file
+        XCTAssertTrue(patch!.contains("only"))  // the commit subject
+        XCTAssertTrue(patch!.contains("f0.txt"))  // the changed file
     }
 
     // MARK: - clone (integration, local — no network)
@@ -91,8 +91,10 @@ final class GitCloneAndLogTests: XCTestCase {
         XCTAssertTrue(result.succeeded, "clone error: \(result.error ?? "nil")")
         XCTAssertEqual(result.path?.lastPathComponent, "checkout")
         var isDir: ObjCBool = false
-        XCTAssertTrue(FileManager.default.fileExists(atPath: result.path!.appendingPathComponent("f0.txt").path,
-                                                     isDirectory: &isDir))
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: result.path!.appendingPathComponent("f0.txt").path,
+                isDirectory: &isDir))
         // The clone has the source's history.
         XCTAssertEqual(Git.log(repoRoot: result.path!, limit: 5).map(\.subject), ["seed"])
     }
@@ -123,7 +125,7 @@ final class GitCloneAndLogTests: XCTestCase {
         _ = Git.run(["branch", "feature"], in: root)
         let branches = Git.localBranches(repoRoot: root)
         XCTAssertEqual(Set(branches.map(\.name)).isSuperset(of: ["feature"]), true)
-        XCTAssertEqual(branches.filter(\.isCurrent).count, 1)          // exactly one current
+        XCTAssertEqual(branches.filter(\.isCurrent).count, 1)  // exactly one current
         XCTAssertFalse(branches.first(where: { $0.name == "feature" })?.isCurrent ?? true)
     }
 
@@ -136,18 +138,18 @@ final class GitCloneAndLogTests: XCTestCase {
 
     func testFileLogFollowsOneFile() throws {
         let root = try tempDir("gitfilelog")
-        seedRepo(root, commits: ["c0"])   // creates f0.txt
+        seedRepo(root, commits: ["c0"])  // creates f0.txt
         // Touch f0.txt again in a new commit.
         try "changed".write(to: root.appendingPathComponent("f0.txt"), atomically: true, encoding: .utf8)
         _ = Git.run(["add", "-A"], in: root)
         _ = Git.run(["commit", "-q", "-m", "touch f0"], in: root)
         let hist = Git.fileLog(path: "f0.txt", repoRoot: root, limit: 10)
-        XCTAssertEqual(hist.map(\.subject), ["touch f0", "c0"])       // both commits touched f0.txt
+        XCTAssertEqual(hist.map(\.subject), ["touch f0", "c0"])  // both commits touched f0.txt
     }
 
     func testShowFileAtRevision() throws {
         let root = try tempDir("gitshowfile")
-        seedRepo(root, commits: ["seed"])   // f0.txt content "0"
+        seedRepo(root, commits: ["seed"])  // f0.txt content "0"
         let content = Git.showFile(revision: "HEAD", path: "f0.txt", repoRoot: root)
         XCTAssertEqual(content?.trimmingCharacters(in: .whitespacesAndNewlines), "0")
     }

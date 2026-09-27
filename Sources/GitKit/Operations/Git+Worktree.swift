@@ -17,12 +17,16 @@ public extension Git {
     /// The short name of the branch checked out at `root`, the short SHA on a detached `HEAD`,
     /// or `nil` when git fails (e.g. an unborn `HEAD` in a repository with no commits).
     static func currentBranch(repoRoot root: URL) -> String? {
-        guard let name = run(["rev-parse", "--abbrev-ref", "HEAD"], in: root)?
-            .trimmed, !name.isEmpty else { return nil }
+        guard
+            let name = run(["rev-parse", "--abbrev-ref", "HEAD"], in: root)?
+                .trimmed, !name.isEmpty
+        else { return nil }
         guard name == "HEAD" else { return name }
         // Detached HEAD — identify the checkout by its short commit SHA instead.
-        guard let sha = run(["rev-parse", "--short", "HEAD"], in: root)?
-            .trimmed, !sha.isEmpty else { return nil }
+        guard
+            let sha = run(["rev-parse", "--short", "HEAD"], in: root)?
+                .trimmed, !sha.isEmpty
+        else { return nil }
         return sha
     }
 
@@ -44,21 +48,23 @@ public extension Git {
             branch = nil
         }
         for line in out.split(separator: "\n", omittingEmptySubsequences: false) {
-            if line.isEmpty {   // blank line terminates an entry
+            if line.isEmpty {  // blank line terminates an entry
                 flush()
             } else if line.hasPrefix("worktree ") {
-                path = URL(fileURLWithPath: String(line.dropFirst("worktree ".count)),
-                           isDirectory: true)
+                path = URL(
+                    fileURLWithPath: String(line.dropFirst("worktree ".count)),
+                    isDirectory: true)
             } else if line.hasPrefix("branch ") {
                 let ref = String(line.dropFirst("branch ".count))
-                branch = ref.hasPrefix("refs/heads/")
+                branch =
+                    ref.hasPrefix("refs/heads/")
                     ? String(ref.dropFirst("refs/heads/".count))
                     : ref
             }
             // "HEAD", "detached", "bare", "locked", "prunable" need no handling:
             // detached/bare entries simply never receive a `branch` line.
         }
-        flush()   // porcelain output may or may not end with a trailing blank line
+        flush()  // porcelain output may or may not end with a trailing blank line
         return result
     }
 
@@ -69,8 +75,9 @@ public extension Git {
     static func worktreeSummaries(repoRoot root: URL) -> [WorktreeSummary] {
         worktrees(repoRoot: root).map {
             let stat = diffStat(repoRoot: $0.path)
-            return WorktreeSummary.make(worktree: $0, status: status(repoRoot: $0.path),
-                                        insertions: stat.insertions, deletions: stat.deletions)
+            return WorktreeSummary.make(
+                worktree: $0, status: status(repoRoot: $0.path),
+                insertions: stat.insertions, deletions: stat.deletions)
         }
     }
 
@@ -82,7 +89,7 @@ public extension Git {
     @discardableResult
     static func removeWorktree(_ worktree: URL, repoRoot root: URL, force: Bool = false) -> Bool {
         var args = ["worktree", "remove"]
-        if force { args.append("--force"); args.append("--force") }   // -f -f overrides a lock too
+        if force { args.append("--force"); args.append("--force") }  // -f -f overrides a lock too
         args.append(worktree.path)
         return run(args, in: root) != nil
     }

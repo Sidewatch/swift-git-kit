@@ -21,7 +21,7 @@ public enum SideBySideDiff {
     public static func rows(from diff: String) -> (left: [SideBySideRow], right: [SideBySideRow]) {
         var builder = Builder()
         var lines = diff.components(separatedBy: "\n")
-        if lines.last == "" { lines.removeLast() }          // the final newline's empty component
+        if lines.last == "" { lines.removeLast() }  // the final newline's empty component
         for raw in lines { builder.take(raw) }
         builder.flushPending()
         return (builder.left, builder.right)
@@ -50,9 +50,9 @@ public enum SideBySideDiff {
                 left.append(SideBySideRow(number: nil, text: raw, kind: .header))
                 right.append(SideBySideRow(number: nil, text: raw, kind: .header))
             } else if !inHunk {
-                return                                       // file header (index / --- / +++ / mode …)
+                return  // file header (index / --- / +++ / mode …)
             } else if raw.hasPrefix("\\") {
-                return                                       // "\ No newline at end of file": no row of its own
+                return  // "\ No newline at end of file": no row of its own
             } else if raw.hasPrefix("-") {
                 pendingRemoved.append(String(raw.dropFirst()))
             } else if raw.hasPrefix("+") {

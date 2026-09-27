@@ -36,7 +36,7 @@ public extension Git {
         var removed: [Int: [String]] = [:]
         var pending: [String] = []
         var anchor = 1
-        var inHunk = false   // real `---`/`+++` file headers only precede the first @@
+        var inHunk = false  // real `---`/`+++` file headers only precede the first @@
         func flush() {
             if !pending.isEmpty { removed[anchor, default: []].append(contentsOf: pending); pending = [] }
         }
@@ -49,11 +49,11 @@ public extension Git {
                 inHunk = true
                 guard let hunk = HunkHeader.parse(line) else { continue }
                 if hunk.changeKind == .deleted {
-                    marks[max(1, hunk.newStart)] = .deleted       // pure deletion
-                    anchor = max(1, hunk.newStart + 1)            // after a pure deletion
+                    marks[max(1, hunk.newStart)] = .deleted  // pure deletion
+                    anchor = max(1, hunk.newStart + 1)  // after a pure deletion
                 } else {
                     for l in hunk.newLineRange { marks[l] = hunk.changeKind }
-                    anchor = hunk.newStart                        // above the first new line
+                    anchor = hunk.newStart  // above the first new line
                 }
             } else if inHunk, line.hasPrefix("-") {
                 // Removed content (even if it starts with "--"). A CRLF file's lines end in `\r`
@@ -74,8 +74,9 @@ public extension Git {
     /// The output is a regular diff that splices into any combined-diff rendering.
     static func untrackedDiff(for file: URL, repoRoot root: URL) -> String {
         guard let rel = relativePathIfUnderRoot(file, root: root) else { return "" }
-        return run(["-c", "core.quotePath=false", "diff", "--no-color", "--no-index", "--", "/dev/null", rel],
-                   in: root, allowedStatuses: [1]) ?? ""
+        return run(
+            ["-c", "core.quotePath=false", "diff", "--no-color", "--no-index", "--", "/dev/null", rel],
+            in: root, allowedStatuses: [1]) ?? ""
     }
 
     /// ``lineChanges(for:repoRoot:)`` for every changed file versus `HEAD`, from one process
@@ -86,11 +87,14 @@ public extension Git {
     static func lineChangesAll(repoRoot root: URL) -> [String: [Int: GitChangeKind]] {
         // core.quotePath=false keeps non-ASCII paths verbatim in the ---/+++
         // headers instead of C-style octal-escaped.
-        guard let diff = run(["-c", "core.quotePath=false", "diff", "--unified=0", "--no-color", "HEAD"],
-                             in: root) else { return [:] }
+        guard
+            let diff = run(
+                ["-c", "core.quotePath=false", "diff", "--unified=0", "--no-color", "HEAD"],
+                in: root)
+        else { return [:] }
         var all: [String: [Int: GitChangeKind]] = [:]
         var aPath: String?, bPath: String?
-        var inHunk = false   // real ---/+++ headers only appear between `diff --git` and the first @@
+        var inHunk = false  // real ---/+++ headers only appear between `diff --git` and the first @@
         func headerPath(_ s: Substring) -> String? {
             guard s != "/dev/null" else { return nil }
             let p = (s.hasPrefix("a/") || s.hasPrefix("b/")) ? s.dropFirst(2) : s
@@ -150,7 +154,7 @@ public extension Git {
         for line in text.split(separator: "\n") {
             let cols = line.split(separator: "\t")
             guard cols.count >= 2 else { continue }
-            if let a = Int(cols[0]) { insertions += a }   // "-" (binary) → nil → skipped
+            if let a = Int(cols[0]) { insertions += a }  // "-" (binary) → nil → skipped
             if let d = Int(cols[1]) { deletions += d }
         }
         return (insertions, deletions)

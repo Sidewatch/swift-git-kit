@@ -22,9 +22,13 @@ public extension Git {
         var author = "", summary = ""
         var ts: TimeInterval = 0
         for raw in out.split(separator: "\n", omittingEmptySubsequences: false) {
-            if raw.hasPrefix("author ") { author = String(raw.dropFirst(7)) }
-            else if raw.hasPrefix("author-time ") { ts = TimeInterval(raw.dropFirst(12)) ?? 0 }
-            else if raw.hasPrefix("summary ") { summary = String(raw.dropFirst(8)) }
+            if raw.hasPrefix("author ") {
+                author = String(raw.dropFirst(7))
+            } else if raw.hasPrefix("author-time ") {
+                ts = TimeInterval(raw.dropFirst(12)) ?? 0
+            } else if raw.hasPrefix("summary ") {
+                summary = String(raw.dropFirst(8))
+            }
         }
         guard !author.isEmpty else { return nil }
         return BlameInfo(author: author, timeAgo: ts > 0 ? relativeTime(ts) : "", summary: summary)

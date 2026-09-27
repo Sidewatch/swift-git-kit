@@ -41,8 +41,9 @@ final class GitCheckpointTests: XCTestCase {
 
     private func write(_ contents: String, to name: String, in root: URL) throws {
         let url = root.appendingPathComponent(name)
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
-                                                withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true)
         try contents.write(to: url, atomically: true, encoding: .utf8)
     }
 
@@ -195,15 +196,17 @@ final class GitCheckpointTests: XCTestCase {
 
         let sha = try XCTUnwrap(Git.createCheckpoint(repoRoot: root))
         let changed = Git.checkpointChangedFiles(from: "HEAD", to: sha, repoRoot: root)
-        XCTAssertFalse(changed.contains { $0.path == ".vscode/settings.json" },
-                       "tracked-but-ignored file reported as changed: \(changed)")
+        XCTAssertFalse(
+            changed.contains { $0.path == ".vscode/settings.json" },
+            "tracked-but-ignored file reported as changed: \(changed)")
 
         // And an edit to it inside a checkpoint range must still be visible.
         let before = try XCTUnwrap(Git.createCheckpoint(repoRoot: root))
         try write("{\"changed\":true}\n", to: ".vscode/settings.json", in: root)
         let after = try XCTUnwrap(Git.createCheckpoint(repoRoot: root))
-        XCTAssertEqual(Git.checkpointChangedFiles(from: before, to: after, repoRoot: root).map(\.path),
-                       [".vscode/settings.json"])
+        XCTAssertEqual(
+            Git.checkpointChangedFiles(from: before, to: after, repoRoot: root).map(\.path),
+            [".vscode/settings.json"])
     }
 
     func testWorkingTreeComparisonDoesNotWriteObjects() throws {
@@ -215,10 +218,11 @@ final class GitCheckpointTests: XCTestCase {
         try write("new\n", to: "fresh.txt", in: root)
 
         func objectCount() -> Int {
-            Int(Git.run(["count-objects", "-v"], in: root)?
-                .split(separator: "\n")
-                .first(where: { $0.hasPrefix("count:") })?
-                .split(separator: " ").last.map(String.init) ?? "0") ?? 0
+            Int(
+                Git.run(["count-objects", "-v"], in: root)?
+                    .split(separator: "\n")
+                    .first(where: { $0.hasPrefix("count:") })?
+                    .split(separator: " ").last.map(String.init) ?? "0") ?? 0
         }
         let before = objectCount()
         for _ in 0..<3 {
@@ -235,8 +239,9 @@ final class GitCheckpointTests: XCTestCase {
         try write("edited\n", to: "tracked.txt", in: root)
         try write("created by the agent\n", to: "fresh.txt", in: root)
 
-        let byPath = Dictionary(uniqueKeysWithValues:
-            Git.checkpointChangedFiles(from: start, to: nil, repoRoot: root).map { ($0.path, $0.kind) })
+        let byPath = Dictionary(
+            uniqueKeysWithValues:
+                Git.checkpointChangedFiles(from: start, to: nil, repoRoot: root).map { ($0.path, $0.kind) })
         XCTAssertEqual(byPath["tracked.txt"], .modified)
         XCTAssertEqual(byPath["fresh.txt"], .added)
         let diff = try XCTUnwrap(Git.checkpointDiff(from: start, to: nil, repoRoot: root))
@@ -263,8 +268,9 @@ final class GitCheckpointTests: XCTestCase {
         _ = Git.run(["gc", "--prune=now", "-q"], in: root)
 
         // Unanchored, this commit would be unreachable and collected — losing the turn.
-        XCTAssertEqual(Git.run(["cat-file", "-t", sha], in: root)?
-            .trimmingCharacters(in: .whitespacesAndNewlines), "commit")
+        XCTAssertEqual(
+            Git.run(["cat-file", "-t", sha], in: root)?
+                .trimmingCharacters(in: .whitespacesAndNewlines), "commit")
         XCTAssertEqual(Git.checkpoints(repoRoot: root).map(\.id), ["turn-1"])
     }
 
@@ -295,8 +301,9 @@ final class GitCheckpointTests: XCTestCase {
         XCTAssertEqual(ids.count, 1)
         XCTAssertFalse(ids[0].contains(".."))
         // The real branch must be untouched.
-        XCTAssertNotEqual(Git.run(["rev-parse", "HEAD"], in: root)?
-            .trimmingCharacters(in: .whitespacesAndNewlines), sha)
+        XCTAssertNotEqual(
+            Git.run(["rev-parse", "HEAD"], in: root)?
+                .trimmingCharacters(in: .whitespacesAndNewlines), sha)
     }
 
     func testAnchorRejectsAnIDWithNothingSafeInIt() throws {

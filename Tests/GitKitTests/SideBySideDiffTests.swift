@@ -16,21 +16,21 @@ import XCTest
 final class SideBySideDiffTests: XCTestCase {
 
     private let diff = """
-    diff --git a/a.txt b/a.txt
-    index 1111111..2222222 100644
-    --- a/a.txt
-    +++ b/a.txt
-    @@ -1,4 +1,5 @@
-     keep
-    -old one
-    -old two
-    +new one
-    +new two
-    +new three
-     tail
-    \\ No newline at end of file
+        diff --git a/a.txt b/a.txt
+        index 1111111..2222222 100644
+        --- a/a.txt
+        +++ b/a.txt
+        @@ -1,4 +1,5 @@
+         keep
+        -old one
+        -old two
+        +new one
+        +new two
+        +new three
+         tail
+        \\ No newline at end of file
 
-    """
+        """
 
     func testPairsChangedRunsAndFillsTheOverflow() {
         let (left, right) = SideBySideDiff.rows(from: diff)

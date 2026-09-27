@@ -21,8 +21,10 @@ public extension Git {
     ///   - repoRoot: The repository.
     /// - Returns: The merge-base commit, or `nil` when the refs share no history.
     static func mergeBase(with base: String, repoRoot: URL) -> String? {
-        guard let out = run(["merge-base", "HEAD", base], in: repoRoot)?
-            .trimmed, !out.isEmpty else { return nil }
+        guard
+            let out = run(["merge-base", "HEAD", base], in: repoRoot)?
+                .trimmed, !out.isEmpty
+        else { return nil }
         return out
     }
 
@@ -35,7 +37,8 @@ public extension Git {
             // Skip a candidate that doesn't resolve, or merge-base would report the failure
             // as "no shared history" and stop the search early.
             guard run(["rev-parse", "--verify", "--quiet", candidate], in: repoRoot) != nil,
-                  let base = mergeBase(with: candidate, repoRoot: repoRoot) else { continue }
+                let base = mergeBase(with: candidate, repoRoot: repoRoot)
+            else { continue }
             // On the integration branch itself the merge-base is HEAD, so the branch scope
             // would show nothing. That's the honest answer — there is no branch work yet.
             return base

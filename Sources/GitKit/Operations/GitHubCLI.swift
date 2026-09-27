@@ -18,15 +18,17 @@ public enum GitHubCLI {
     /// Where `gh` might live. A sandboxed or GUI process often has a bare PATH, so the common
     /// Homebrew and system locations are probed directly before falling back to `which`.
     public static let candidatePaths = [
-        "/opt/homebrew/bin/gh",   // Apple Silicon Homebrew
-        "/usr/local/bin/gh",      // Intel Homebrew
+        "/opt/homebrew/bin/gh",  // Apple Silicon Homebrew
+        "/usr/local/bin/gh",  // Intel Homebrew
         "/usr/bin/gh",
-        "/run/current-system/sw/bin/gh",   // nix
+        "/run/current-system/sw/bin/gh",  // nix
     ]
 
     /// Absolute path to `gh`, or nil if it can't be found.
-    public static func executablePath(candidates: [String] = candidatePaths,
-                                      which: (String) -> String? = ProcessRunner.which) -> String? {
+    public static func executablePath(
+        candidates: [String] = candidatePaths,
+        which: (String) -> String? = ProcessRunner.which
+    ) -> String? {
         for path in candidates where FileManager.default.isExecutableFile(atPath: path) { return path }
         return which("gh")
     }

@@ -48,8 +48,9 @@ final class GitDiffStatRangeTests: XCTestCase {
     func testClosedSpanCountsOnlyThatSpan() throws {
         let root = try makeRepo()
         let first = try commit(["one", "two", "three"], to: "f.txt", in: root, message: "base")
-        let second = try commit(["one", "CHANGED", "three", "four", "five"],
-                                to: "f.txt", in: root, message: "edit")
+        let second = try commit(
+            ["one", "CHANGED", "three", "four", "five"],
+            to: "f.txt", in: root, message: "edit")
 
         let stat = Git.diffStat(repoRoot: root, from: first, to: second)
         XCTAssertEqual(stat.insertions, 3)
@@ -69,8 +70,9 @@ final class GitDiffStatRangeTests: XCTestCase {
 
         XCTAssertEqual(Git.diffStat(repoRoot: root, from: first, to: nil).insertions, 0)
 
-        try "one\ntwo\nthree\n".write(to: root.appendingPathComponent("f.txt"),
-                                     atomically: true, encoding: .utf8)
+        try "one\ntwo\nthree\n".write(
+            to: root.appendingPathComponent("f.txt"),
+            atomically: true, encoding: .utf8)
         let stat = Git.diffStat(repoRoot: root, from: first, to: nil)
         XCTAssertEqual(stat.insertions, 1)
         XCTAssertEqual(stat.deletions, 0)

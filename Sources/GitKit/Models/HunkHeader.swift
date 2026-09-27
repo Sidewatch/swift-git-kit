@@ -68,8 +68,9 @@ public struct HunkHeader: Equatable, Sendable {
         // parts[0] == "@@", parts[1] == "-old[,count]", parts[2] == "+new[,count]"
         guard parts.count >= 3, parts[1].hasPrefix("-"), parts[2].hasPrefix("+") else { return nil }
         guard let old = field(parts[1]), let new = field(parts[2]) else { return nil }
-        return HunkHeader(oldStart: old.start, oldCount: old.count,
-                          newStart: new.start, newCount: new.count)
+        return HunkHeader(
+            oldStart: old.start, oldCount: old.count,
+            newStart: new.start, newCount: new.count)
     }
 
     /// Parses one `±start[,count]` field. Returns nil when the start is not a number, so a
@@ -79,7 +80,7 @@ public struct HunkHeader: Equatable, Sendable {
     /// line type — `Substring` from a `String`, but `Substring.SubSequence` when the caller
     /// already handed us a slice.
     private static func field(_ f: some StringProtocol) -> (start: Int, count: Int)? {
-        let nums = f.dropFirst().split(separator: ",")   // strip the +/-
+        let nums = f.dropFirst().split(separator: ",")  // strip the +/-
         guard let first = nums.first, let start = Int(first) else { return nil }
         let count = nums.count > 1 ? (Int(nums[1]) ?? 1) : 1
         return (start, count)

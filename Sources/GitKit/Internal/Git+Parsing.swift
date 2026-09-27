@@ -25,9 +25,15 @@ extension Git {
         let s = Int(now - ts)
         if s < 60 { return String(localized: "just now", bundle: .module, comment: "Blame: a commit's age under a minute") }
         if s < 3600 { return String(localized: "\(s / 60)m ago", bundle: .module, comment: "Blame: a commit's age in minutes, short form") }
-        if s < 86400 { return String(localized: "\(s / 3600)h ago", bundle: .module, comment: "Blame: a commit's age in hours, short form") }
-        if s < 2_592_000 { return String(localized: "\(s / 86400)d ago", bundle: .module, comment: "Blame: a commit's age in days, short form") }
-        if s < 31_536_000 { return String(localized: "\(s / 2_592_000)mo ago", bundle: .module, comment: "Blame: a commit's age in months, short form") }
+        if s < 86400 {
+            return String(localized: "\(s / 3600)h ago", bundle: .module, comment: "Blame: a commit's age in hours, short form")
+        }
+        if s < 2_592_000 {
+            return String(localized: "\(s / 86400)d ago", bundle: .module, comment: "Blame: a commit's age in days, short form")
+        }
+        if s < 31_536_000 {
+            return String(localized: "\(s / 2_592_000)mo ago", bundle: .module, comment: "Blame: a commit's age in months, short form")
+        }
         return String(localized: "\(s / 31_536_000)y ago", bundle: .module, comment: "Blame: a commit's age in years, short form")
     }
 }

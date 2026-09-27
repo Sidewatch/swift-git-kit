@@ -28,13 +28,15 @@ final class WorktreeSummaryTests: XCTestCase {
     // MARK: - make (pure)
 
     func testMakeTalliesEachKind() {
-        let summary = WorktreeSummary.make(worktree: fixtureWorktree(), status: [
-            ("a.swift", .added), ("b.swift", .added),
-            ("c.swift", .modified),
-            ("d.swift", .deleted),
-            ("e.swift", .untracked),
-            ("f.swift", .renamed),
-        ])
+        let summary = WorktreeSummary.make(
+            worktree: fixtureWorktree(),
+            status: [
+                ("a.swift", .added), ("b.swift", .added),
+                ("c.swift", .modified),
+                ("d.swift", .deleted),
+                ("e.swift", .untracked),
+                ("f.swift", .renamed),
+            ])
         XCTAssertEqual(summary.added, 2)
         XCTAssertEqual(summary.modified, 1)
         XCTAssertEqual(summary.deleted, 1)
@@ -58,8 +60,9 @@ final class WorktreeSummaryTests: XCTestCase {
     }
 
     func testMakeCarriesLineStats() {
-        let summary = WorktreeSummary.make(worktree: fixtureWorktree(),
-                                           status: [("x", .modified)], insertions: 12, deletions: 5)
+        let summary = WorktreeSummary.make(
+            worktree: fixtureWorktree(),
+            status: [("x", .modified)], insertions: 12, deletions: 5)
         XCTAssertEqual(summary.insertions, 12)
         XCTAssertEqual(summary.deletions, 5)
     }
@@ -107,8 +110,9 @@ final class WorktreeSummaryTests: XCTestCase {
         let linked = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("wtsum-linked-\(UUID().uuidString)", isDirectory: true)
         scratchDirs.append(linked)
-        XCTAssertNotNil(Git.run(["worktree", "add", "-q", "-b", "feature", linked.path], in: root),
-                        "worktree add failed")
+        XCTAssertNotNil(
+            Git.run(["worktree", "add", "-q", "-b", "feature", linked.path], in: root),
+            "worktree add failed")
 
         // Dirty each tree differently: main gets an untracked file; the linked
         // tree modifies the tracked seed file.
@@ -172,7 +176,7 @@ final class WorktreeSummaryTests: XCTestCase {
         // only --force --force (what force: true now passes) can override a lock.
         XCTAssertNotNil(Git.run(["worktree", "lock", linked.path], in: root))
 
-        XCTAssertFalse(Git.removeWorktree(linked, repoRoot: root))              // locked → refused
+        XCTAssertFalse(Git.removeWorktree(linked, repoRoot: root))  // locked → refused
         XCTAssertTrue(Git.removeWorktree(linked, repoRoot: root, force: true))  // -f -f overrides
         XCTAssertEqual(Git.worktrees(repoRoot: root).count, 1)
     }

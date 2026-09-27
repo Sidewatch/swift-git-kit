@@ -44,9 +44,11 @@ public struct WorktreeSummary: Sendable, Equatable {
     public var isDirty: Bool { changeCount > 0 }
 
     /// Creates a summary from counts already tallied; ``make(worktree:status:insertions:deletions:)`` tallies them.
-    public init(worktree: GitWorktree, added: Int = 0, modified: Int = 0,
-                deleted: Int = 0, untracked: Int = 0, renamed: Int = 0,
-                insertions: Int = 0, deletions: Int = 0) {
+    public init(
+        worktree: GitWorktree, added: Int = 0, modified: Int = 0,
+        deleted: Int = 0, untracked: Int = 0, renamed: Int = 0,
+        insertions: Int = 0, deletions: Int = 0
+    ) {
         self.worktree = worktree
         self.added = added
         self.modified = modified
@@ -60,21 +62,24 @@ public struct WorktreeSummary: Sendable, Equatable {
     /// Tallies a worktree's `git status` entries by kind. Pure — pass the status
     /// list from ``Git/status(repoRoot:)`` for `worktree.path`; `insertions`/
     /// `deletions` come from ``Git/diffStat(repoRoot:)`` (0 when not gathered).
-    public static func make(worktree: GitWorktree,
-                            status: [(path: String, kind: GitChangeKind)],
-                            insertions: Int = 0, deletions: Int = 0) -> WorktreeSummary {
+    public static func make(
+        worktree: GitWorktree,
+        status: [(path: String, kind: GitChangeKind)],
+        insertions: Int = 0, deletions: Int = 0
+    ) -> WorktreeSummary {
         var a = 0, m = 0, d = 0, u = 0, r = 0
         for entry in status {
             switch entry.kind {
-            case .added:     a += 1
-            case .modified:  m += 1
-            case .deleted:   d += 1
+            case .added: a += 1
+            case .modified: m += 1
+            case .deleted: d += 1
             case .untracked: u += 1
-            case .renamed:   r += 1
+            case .renamed: r += 1
             }
         }
-        return WorktreeSummary(worktree: worktree, added: a, modified: m,
-                               deleted: d, untracked: u, renamed: r,
-                               insertions: insertions, deletions: deletions)
+        return WorktreeSummary(
+            worktree: worktree, added: a, modified: m,
+            deleted: d, untracked: u, renamed: r,
+            insertions: insertions, deletions: deletions)
     }
 }

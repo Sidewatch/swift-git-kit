@@ -37,16 +37,26 @@ public extension Git {
     ///
     /// Fields are `%x1f`-delimited so a subject with any punctuation parses cleanly.
     static func log(repoRoot root: URL, limit: Int = 300) -> [GitCommit] {
-        guard let out = run(["log", "-n", "\(max(1, limit))", "--date=short",
-                             "--pretty=format:\(Self.commitFormat)"], in: root) else { return [] }
+        guard
+            let out = run(
+                [
+                    "log", "-n", "\(max(1, limit))", "--date=short",
+                    "--pretty=format:\(Self.commitFormat)",
+                ], in: root)
+        else { return [] }
         return parseCommits(out)
     }
 
     /// Commit history touching `path` (repository-relative), newest first — the History of
     /// a single file. Follows across renames.
     static func fileLog(path: String, repoRoot root: URL, limit: Int = 100) -> [GitCommit] {
-        guard let out = run(["log", "-n", "\(max(1, limit))", "--date=short", "--follow",
-                             "--pretty=format:\(Self.commitFormat)", "--", path], in: root) else { return [] }
+        guard
+            let out = run(
+                [
+                    "log", "-n", "\(max(1, limit))", "--date=short", "--follow",
+                    "--pretty=format:\(Self.commitFormat)", "--", path,
+                ], in: root)
+        else { return [] }
         return parseCommits(out)
     }
 
