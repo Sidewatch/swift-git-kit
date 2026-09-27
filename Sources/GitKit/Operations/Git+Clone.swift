@@ -37,10 +37,16 @@ public extension Git {
         if let trimmedName, !trimmedName.isEmpty { args.append(trimmedName) }
 
         let result = ProcessRunner.run(executable, args, directory: parent, augmentPATH: false)
-        guard result.launched else { return CloneResult(path: nil, error: "Couldn't launch git.") }
+        guard result.launched else {
+            return CloneResult(path: nil, error: String(localized: "Couldn't launch git.", bundle: .module,
+                                                        comment: "Clone Failed alert: the git program could not be started"))
+        }
         guard result.succeeded else {
             let text = result.errorText.trimmed
-            return CloneResult(path: nil, error: text.isEmpty ? "git clone failed (exit \(result.status))" : text)
+            return CloneResult(path: nil, error: text.isEmpty
+                ? String(localized: "git clone failed (exit \(result.status))", bundle: .module,
+                         comment: "Clone Failed alert when git printed nothing; the number is git's exit status")
+                : text)
         }
         let dir = (trimmedName?.isEmpty == false ? trimmedName! : defaultCloneDirectoryName(for: url))
         return CloneResult(path: parent.appendingPathComponent(dir), error: nil)
