@@ -10,18 +10,11 @@
 
 import Foundation
 
+/// Per-line blame.
 public extension Git {
 
-    /// Blame for a single working-tree line (fast — uses `blame -L n,n`).
-    ///
-    /// Uncommitted lines report author `"Not Committed Yet"`.
-    ///
-    /// - Parameters:
-    ///   - file: The file to blame.
-    ///   - line: The 1-based working-tree line number.
-    ///   - root: The repository root (see ``repoRoot(for:)``).
-    /// - Returns: The line's ``BlameInfo``, or `nil` if `line` is out of range or
-    ///   blame could not be computed.
+    /// Blame for one 1-based working-tree line (fast: `blame -L n,n`), or `nil` when `line` is
+    /// out of range or blame fails. Uncommitted lines report author `"Not Committed Yet"`.
     static func blame(for file: URL, line: Int, repoRoot root: URL) -> BlameInfo? {
         guard line > 0 else { return nil }
         let rel = relativePath(file, root: root)

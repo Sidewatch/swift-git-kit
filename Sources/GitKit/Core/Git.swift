@@ -11,43 +11,17 @@
 import Foundation
 import ProcessRunner
 import FoundationExtensions
-/// A thin wrapper over the `git` command-line tool.
+/// A thin wrapper over the `git` command-line tool: a caseless namespace of static calls
+/// (status, diff, blame, staging, worktrees, checkpoints).
 ///
-/// `Git` is a namespace (a caseless `enum`) — you never instantiate it; call the
-/// static methods directly:
-///
-/// ```swift
-/// import GitKit
-///
-/// guard let root = Git.repoRoot(for: someFileURL) else { return }
-/// for change in Git.status(repoRoot: root) {
-///     print(change.path, change.kind)
-/// }
-/// ```
-///
-/// Every call shells out to ``executable`` synchronously and is cheap. When
-/// scanning a whole repository, run these off the main queue.
-///
-/// The operations are grouped across the package:
-/// - Status: ``status(repoRoot:)``
-/// - Diff: ``lineChanges(for:repoRoot:)``, ``removedLines(for:repoRoot:)``
-/// - Blame: ``blame(for:line:repoRoot:)``
-/// - Actions: ``stage(_:repoRoot:)``, ``unstage(_:repoRoot:)``, ``discard(_:kind:repoRoot:)``
-/// - Worktrees: ``currentBranch(repoRoot:)``, ``worktrees(repoRoot:)``
-///
-/// - Note: This wraps the `git` executable rather than linking libgit2, so a
-///   working `git` must be installed at ``executable``.
+/// Every call shells out to ``executable`` synchronously; when scanning a whole repository,
+/// run them off the main queue. No libgit2 — a working `git` must be installed at ``executable``.
 public enum Git {
 
-    /// Absolute path to the `git` executable used for every invocation.
+    /// Absolute path to the `git` executable used for every invocation; `/usr/bin/git` by default.
     ///
-    /// Defaults to the system git at `/usr/bin/git` (the Command Line Tools shim
-    /// on macOS). Point it elsewhere before making calls to use a different git.
-    ///
-    /// Lock-guarded because every `git` call reads it, and those calls run on background
-    /// queues while the setter is a start-up/preferences concern on the main thread. A
-    /// `String` is a struct with a reference-counted buffer, so an unsynchronized swap
-    /// racing a read is a memory-safety problem and not just a stale path.
+    /// Lock-guarded: background `git` calls read it while the main thread may set it, and an
+    /// unsynchronized `String` swap racing a read is a memory-safety problem, not a stale path.
     public static var executable: String {
         get { lock.lock(); defer { lock.unlock() }; return storedExecutable }
         set { lock.lock(); defer { lock.unlock() }; storedExecutable = newValue }
@@ -70,45 +44,18 @@ public enum Git {
     /// Runs `git <args>` like ``run(_:in:)`` but also treats the exit statuses in
     /// `allowedStatuses` as success.
     ///
-    /// Some git subcommands use a non-zero exit to report a *result*, not a
-    /// failure — `git diff --no-index` exits 1 when the inputs differ, which is
-    /// its normal "found a difference" outcome.
-    ///
-    /// - Parameters:
-    ///   - args: Arguments passed to `git`.
-    ///   - dir: Working directory the command runs in.
-    ///   - allowedStatuses: Non-zero exit statuses to accept alongside 0.
-    /// - Returns: The command's standard output decoded as UTF-8, or `nil` if the
-    ///   process failed to launch or exited with a status outside the allowed set.
+    /// Some subcommands report a result with a non-zero exit — `git diff --no-index` exits 1
+    /// when the inputs differ. Returns standard output, or `nil` outside the allowed statuses.
     public static func run(_ args: [String], in dir: URL, allowedStatuses: Set<Int32>) -> String? {
         run(args, in: dir, environment: [:], allowedStatuses: allowedStatuses)
     }
 
-    /// Runs `git <args>` like ``run(_:in:allowedStatuses:)`` with extra environment variables
-    /// layered over the process environment — and is the single place `git` is launched.
+    /// Runs `git <args>` like ``run(_:in:allowedStatuses:)`` with `environment` layered over the
+    /// inherited one (e.g. `GIT_INDEX_FILE` for a scratch index) — the single place `git` launches.
     ///
-    /// The environment overload is needed for plumbing commands steered by the environment
-    /// rather than by flags — chiefly `GIT_INDEX_FILE`, which lets ``createCheckpoint(repoRoot:)``
-    /// stage the working tree into a scratch index without disturbing the real one.
-    ///
-    /// Delegates to ``ProcessRunner`` rather than driving `Process` directly. This used to be two
-    /// near-identical hand-rolled runners differing only in whether they merged an environment,
-    /// each carrying its own copy of the "never attach an undrained pipe" reasoning. That
-    /// warning was correct and load-bearing — an undrained stderr pipe deadlocks once git
-    /// writes ~64 KB of warnings — but a rule re-stated per copy is a rule waiting to be
-    /// dropped from the next copy, which is exactly how the deadlock reached `GitHubCLI`.
-    /// `ProcessRunner` drains both streams concurrently as its only shape, so the trap is
-    /// structurally unavailable here now.
-    ///
-    /// stderr is still discarded, just at the boundary rather than at the pipe: it is drained
-    /// (so it cannot block) and then dropped, because these callers want output or nothing.
-    ///
-    /// - Parameters:
-    ///   - args: Arguments passed to `git`.
-    ///   - dir: Working directory the command runs in.
-    ///   - environment: Variables layered over (and overriding) the inherited environment.
-    ///   - allowedStatuses: Non-zero exit statuses to accept alongside 0.
-    /// - Returns: The command's standard output decoded as UTF-8, or `nil` on failure.
+    /// Goes through ``ProcessRunner``, which drains stdout and stderr concurrently: an undrained
+    /// stderr pipe deadlocks once git writes ~64 KB of warnings. stderr is then dropped; callers
+    /// want output or `nil`.
     public static func run(_ args: [String], in dir: URL,
                            environment: [String: String],
                            allowedStatuses: Set<Int32> = []) -> String? {
@@ -131,18 +78,12 @@ public enum Git {
         return URL(fileURLWithPath: out)
     }
 
-    /// Every git repository strictly BELOW `root` — a directory holding a `.git`
-    /// (a directory, or the file a worktree or submodule leaves) — found by walking
-    /// the tree without descending into `.git` itself, into any `skipping` name, or
-    /// past `maxDepth` levels; at most `limit` results, in walk order. `root`'s own
-    /// repo (or the one it sits inside) is ``repoRoot(for:)``'s job and is excluded.
+    /// Every git repository strictly BELOW `root` (a directory holding a `.git` directory or
+    /// file), walking no deeper than `maxDepth`, skipping `.git` and any `skipping` name; at most
+    /// `limit` results, in walk order. `root`'s own repo is ``repoRoot(for:)``'s job.
     ///
-    /// A WordPress site's plugins and libraries are each their own checkout inside a
-    /// folder that is not one. With only the opened folder's repo to go on there was
-    /// none, every git surface hid itself, and no file was ever tinted, badged or
-    /// gutter-diffed. A repo inside a repo is still returned: git treats a nested
-    /// checkout as an opaque untracked directory, and its own status is the truth
-    /// for its files. Walks the disk — call off the main thread.
+    /// For folders that are not a repo but hold checkouts (a WordPress site's plugins). A repo
+    /// inside a repo is still returned: its own status is the truth for its files. Walks the disk.
     public static func nestedRepoRoots(under root: URL, skipping skip: Set<String>,
                                        maxDepth: Int = 6, limit: Int = 64) -> [URL] {
         let fm = FileManager.default
@@ -178,16 +119,10 @@ public enum Git {
 
     /// The path of `file` relative to `root`, or `nil` when `file` is not under `root`.
     ///
-    /// Compares standardized paths first (cheap, no disk I/O), then fully
-    /// canonicalized paths. Standardization/symlink resolution only reconciles
-    /// the macOS `/private/var` ↔ `/var` symlink for paths that exist on disk,
-    /// so a *deleted* file expressed via the unresolved form would otherwise
-    /// fail the prefix check — see ``canonicalPath(_:)``.
-    ///
-    /// Use this (not ``relativePath(_:root:)``) whenever a path may originate
-    /// outside the repo — e.g. an agent's absolute edit path — so an out-of-root
-    /// file is refused rather than collapsed to a bare basename that could match
-    /// an unrelated same-named file inside the repo.
+    /// Compares standardized paths, then canonical ones (``canonicalPath(_:)``), so a deleted
+    /// file under `/var` ↔ `/private/var` still matches. Use this, not ``relativePath(_:root:)``,
+    /// for paths that may come from outside the repo: an out-of-root file is refused rather than
+    /// collapsed to a basename that could match an unrelated file.
     public static func relativePathIfUnderRoot(_ file: URL, root: URL) -> String? {
         func relative(_ f: String, _ r: String) -> String? {
             f.hasPrefix(r + "/") ? String(f.dropFirst(r.count + 1)) : nil

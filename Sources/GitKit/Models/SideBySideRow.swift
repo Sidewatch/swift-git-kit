@@ -14,6 +14,7 @@ import Foundation
 /// row `i` on the left faces row `i` on the right; a `filler` is the blank that keeps them
 /// aligned where only one side has a line.
 public struct SideBySideRow: Equatable, Sendable {
+    /// What a row shows, which decides its tint and whether it has a line number.
     public enum Kind: Equatable, Sendable {
         /// An `@@` hunk header, shown on both sides.
         case header
@@ -31,9 +32,12 @@ public struct SideBySideRow: Equatable, Sendable {
 
     /// The 1-based line number on this side; nil for headers and fillers.
     public let number: Int?
+    /// The line's text without its diff marker; the whole `@@` line for a header.
     public let text: String
+    /// What the row shows.
     public let kind: Kind
 
+    /// Creates a row.
     public init(number: Int?, text: String, kind: Kind) {
         self.number = number
         self.text = text

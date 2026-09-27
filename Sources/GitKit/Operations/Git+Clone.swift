@@ -12,12 +12,16 @@ import Foundation
 import FoundationExtensions
 import ProcessRunner
 
+/// Cloning a remote repository.
 public extension Git {
 
     /// The outcome of a clone: the created directory on success, or git's error text.
     struct CloneResult: Equatable, Sendable {
+        /// The cloned directory, or nil when the clone failed.
         public let path: URL?
+        /// git's error text when the clone failed.
         public let error: String?
+        /// Whether the clone produced a directory.
         public var succeeded: Bool { path != nil }
     }
 

@@ -12,17 +12,9 @@ import Foundation
 
 /// A unified-diff hunk header: `@@ -oldStart[,oldCount] +newStart[,newCount] @@ [section]`.
 ///
-/// This existed three times before it existed once — twice inside this package
-/// (``Git/lineDiff(for:repoRoot:)`` and ``Git/lineChangesAll(repoRoot:)``) and once in
-/// Sidewatch's side-by-side viewer, which had drifted into a weaker variant: it read only the
-/// two start lines, ignored the counts entirely, and so could not tell an addition from a
-/// modification or spot a pure deletion. Every consumer of a `git diff` needs this exact
-/// parse, so it belongs with the git wrapper rather than being re-derived per view.
-///
-/// The counts are genuinely load-bearing, which is why the weaker variant was a latent bug and
-/// not merely duplication: `oldCount == 0` means text was only added, `newCount == 0` means it
-/// was only removed, and the difference decides whether a line is marked added, modified, or
-/// deleted. See ``changeKind``.
+/// The one parse every `git diff` consumer shares. The counts are load-bearing: `oldCount == 0`
+/// means text was only added, `newCount == 0` only removed, which decides whether a line is
+/// marked added, modified or deleted (``changeKind``).
 public struct HunkHeader: Equatable, Sendable {
 
     /// 1-based first line of the hunk on the OLD side.
@@ -66,15 +58,10 @@ public struct HunkHeader: Equatable, Sendable {
         return newStart..<(newStart + newCount)
     }
 
-    /// Parses a `@@ … @@` header line, or returns nil when it is not one / is malformed.
+    /// Parses a `@@ … @@` header line (trailing newline optional), or nil when it is not one.
     ///
-    /// Tolerant in the ways real `git diff` output requires: a missing count means `1` (the
-    /// unified-diff shorthand, so `-5` is `(5, 1)`), a trailing section heading after the
-    /// closing `@@` is ignored, and anything that does not start with `@@` is rejected rather
-    /// than half-parsed.
-    ///
-    /// - Parameter line: One line of unified-diff output, with or without its trailing newline.
-    /// - Returns: The parsed header, or nil if `line` is not a well-formed hunk header.
+    /// A missing count means `1` (so `-5` is `(5, 1)`), a trailing section heading is ignored,
+    /// and anything not starting with `@@` is rejected rather than half-parsed.
     public static func parse(_ line: some StringProtocol) -> HunkHeader? {
         guard line.hasPrefix("@@") else { return nil }
         let parts = line.split(separator: " ")

@@ -10,21 +10,13 @@
 
 import Foundation
 
+/// Working-tree status.
 public extension Git {
 
-    /// Working-tree changes versus `HEAD`, one entry per changed file.
+    /// Working-tree changes versus `HEAD` as repository-relative `(path, kind)` pairs.
     ///
-    /// Parses `git status --porcelain=v1 -z -uall`. The `-z` (NUL-delimited)
-    /// format emits pathnames verbatim — no C-style quoting for spaces, quotes,
-    /// backslashes, or non-ASCII characters — so paths match the disk exactly.
-    /// `-uall` lists every untracked file individually — without it, git
-    /// collapses a brand-new untracked directory to a single trailing-slash
-    /// entry (`?? NewFeature/`), hiding the files inside it from callers that
-    /// decorate per file. For renames/copies, `path` is the new path (the old
-    /// path arrives as a separate NUL-terminated field and is skipped).
-    ///
-    /// - Parameter root: The repository root (see ``repoRoot(for:)``).
-    /// - Returns: `(path, kind)` pairs, where `path` is repository-relative.
+    /// `-z` keeps paths verbatim (no C-style quoting); `-uall` lists each untracked file rather
+    /// than collapsing a new directory to `dir/`. A rename or copy reports its new path.
     static func status(repoRoot root: URL) -> [(path: String, kind: GitChangeKind)] {
         guard let out = run(["status", "--porcelain=v1", "-z", "-uall"], in: root) else { return [] }
         var result: [(String, GitChangeKind)] = []

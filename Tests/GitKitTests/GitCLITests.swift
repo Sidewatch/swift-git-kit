@@ -490,7 +490,7 @@ final class GitKitTests: XCTestCase {
         XCTAssertEqual(removed[2], ["b"])   // "b" ghosts above new line 2 ("c")
     }
 
-    // MARK: - CRLF files (18 Sep 2026)
+    // MARK: - CRLF files
 
     /// In Swift `"\r\n"` is ONE `Character`, so a `split(separator: "\n")` over the diff of a CRLF
     /// file never divided its content lines: a second hunk header rode along inside the first

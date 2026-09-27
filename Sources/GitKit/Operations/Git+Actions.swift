@@ -10,6 +10,7 @@
 
 import Foundation
 
+/// Staging, unstaging and discarding changes.
 public extension Git {
 
     /// Stages `file` (`git add`). Returns `true` on success.
@@ -32,20 +33,12 @@ public extension Git {
         return run(["restore", "--staged", "--", rel], in: root) != nil
     }
 
-    /// Reverts `file` to `HEAD` (tracked) or moves it to the Trash (untracked). **Destructive.**
+    /// Reverts `file` to `HEAD` by `kind`; `true` on success. **Destructive.**
     ///
-    /// Fails (returns `false`) when `file` is not located under `root` — never falls back to
-    /// a bare-filename pathspec that could clobber an unrelated same-named file at the
-    /// repository root, and never deletes anything outside the repository. Until 18 Sep 2026
-    /// the untracked branch skipped that check: it was a plain `removeItem` on whatever URL
-    /// it was handed.
-    ///
-    /// - Parameter kind: The file's change kind. `.untracked` files go to the Trash (see
-    ///   ``trashUntracked(_:)`` — a directory is refused); `.added` files (staged-new, absent
-    ///   from `HEAD`) are removed from the index and disk; `.renamed` files come back under
-    ///   their old name with the new name removed; all others are restored from `HEAD`,
-    ///   discarding local edits.
-    /// - Returns: `true` on success.
+    /// `.untracked` goes to the Trash (``trashUntracked(_:)``), `.added` leaves the index and
+    /// disk, `.renamed` returns under its old name, anything else is restored from `HEAD`. Every
+    /// kind — untracked included — is refused when `file` is not under `root`, so nothing outside
+    /// the repository or a same-named file elsewhere is ever touched.
     @discardableResult
     static func discard(_ file: URL, kind: GitChangeKind, repoRoot root: URL) -> Bool {
         guard let rel = relativePathIfUnderRoot(file, root: root) else { return false }
@@ -61,19 +54,11 @@ public extension Git {
         return run(["restore", "--source=HEAD", "--staged", "--worktree", "--"] + paths, in: root) != nil
     }
 
-    /// Moves an untracked FILE to the Trash and returns where it landed; nil when it was not
-    /// a file, or the Trash refused it.
+    /// Moves an untracked FILE to the Trash and returns where it landed; nil when it was not a
+    /// file or the Trash refused it — never a permanent delete, so the discard stays undoable.
     ///
-    /// The Trash rather than `removeItem`: discarding a file the agent just wrote is the most
-    /// common destructive action in a review tool, and the Trash is the one undo the OS gives
-    /// it (VS Code's `git.discardUntrackedChangesToTrash` defaults on for the same reason).
-    /// There is deliberately no fall-through to a permanent delete when trashing fails — a
-    /// refusal the user can see beats a deletion they cannot reverse.
-    ///
-    /// A DIRECTORY is refused outright: `git status -uall` reports a nested repository as a
-    /// single `nested/` entry, so the "untracked file" a row describes can be an entire
-    /// checkout with its own `.git`, and "discard this file" must never become `rm -rf` of
-    /// it. Symlinks to directories fall under the same rule.
+    /// A directory (or a symlink to one) is refused: `git status -uall` reports a nested
+    /// repository as one `nested/` entry, and discarding it must never become `rm -rf` of a checkout.
     static func trashUntracked(_ file: URL) -> URL? {
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: file.path, isDirectory: &isDirectory),

@@ -11,6 +11,7 @@
 import Foundation
 import FoundationExtensions
 
+/// Where the current branch diverged from its base.
 public extension Git {
 
     /// The commit where the current branch diverged from `base`.
@@ -25,16 +26,10 @@ public extension Git {
         return out
     }
 
-    /// The commit the current branch forked from its integration branch.
+    /// The commit the current branch forked from its integration branch, or nil when none exists.
     ///
-    /// The integration branch is resolved by trying, in order: the remote's own default
-    /// (`origin/HEAD`, which is what the remote says it is), then `main`, then `master`. That
-    /// order matters — a repo can carry a stale local `main` alongside a remote default of
-    /// something else, and the remote is the more trustworthy answer.
-    ///
-    /// - Parameter repoRoot: The repository.
-    /// - Returns: The fork point, or `nil` when no candidate branch exists (a repo with only
-    ///   one branch, or one named something else entirely).
+    /// Tries `origin/HEAD`, then `main`, then `master`: the remote's default comes first because
+    /// a repo can carry a stale local `main` alongside a remote default of something else.
     static func defaultBranchMergeBase(repoRoot: URL) -> String? {
         for candidate in ["origin/HEAD", "main", "master"] {
             // Skip a candidate that doesn't resolve, or merge-base would report the failure

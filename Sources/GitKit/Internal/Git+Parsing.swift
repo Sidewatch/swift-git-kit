@@ -11,6 +11,7 @@
 
 import Foundation
 
+/// Pure parsers shared across operations, internal so tests can reach them.
 extension Git {
 
     /// Formats a Unix epoch timestamp as a short relative age (`"just now"`,

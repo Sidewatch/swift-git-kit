@@ -12,6 +12,7 @@
 import Foundation
 import FoundationExtensions
 
+/// Branches, remotes, upstream tracking, fetch and checkout.
 public extension Git {
 
     // `currentBranch(repoRoot:)` lives in Git+Worktree.

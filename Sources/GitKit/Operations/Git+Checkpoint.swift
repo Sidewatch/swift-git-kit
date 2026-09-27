@@ -12,6 +12,7 @@
 import Foundation
 import FoundationExtensions
 
+/// Checkpoints: whole-tree snapshots as anchored dangling commits, diffed to see what a turn changed.
 public extension Git {
 
     /// The ref namespace checkpoints are anchored under.
@@ -21,24 +22,12 @@ public extension Git {
     /// to normal use of the repo.
     static var checkpointRefPrefix: String { "refs/sidewatch/checkpoints/" }
 
-    /// Captures the entire working tree — modifications, new files, and deletions — as a
-    /// dangling commit, **without touching the working tree, the index, or the stash list**.
+    /// Captures the whole working tree (honouring `.gitignore`) as a dangling commit parented on
+    /// `HEAD`, **without touching the working tree, the index, or the stash list**; nil on failure.
     ///
-    /// The commit is built through a scratch index: `git add -A` into a `GIT_INDEX_FILE`
-    /// outside the repo, `git write-tree`, then `git commit-tree` parented on `HEAD`. Two of
-    /// these bracketing a range of edits make `git diff <a> <b>` an exact answer to "what
-    /// changed in between", where reading the working tree can only ever approximate it.
-    ///
-    /// The scratch index lives outside the repository deliberately: inside, `git add -A` sweeps
-    /// up the index's own `.lock` file and commits it.
-    ///
-    /// `.gitignore` is respected, so build output never lands in a checkpoint.
-    ///
-    /// - Important: The returned commit is unreferenced and therefore eligible for garbage
-    ///   collection. Pass it to ``anchorCheckpoint(_:id:repoRoot:)`` to keep it alive.
-    ///
-    /// - Parameter repoRoot: The repository to snapshot.
-    /// - Returns: The commit SHA, or `nil` if any step failed.
+    /// Built through a scratch `GIT_INDEX_FILE` that must live outside the repo, or `git add -A`
+    /// commits the index's own `.lock`. The commit is unreferenced — pass it to
+    /// ``anchorCheckpoint(_:id:repoRoot:)`` before `git gc` prunes it.
     static func createCheckpoint(repoRoot: URL) -> String? {
         let indexPath = FileManager.default.temporaryDirectory
             .appendingPathComponent("sidewatch-checkpoint-index-\(UUID().uuidString)").path
@@ -69,18 +58,8 @@ public extension Git {
         return trimmed(run(args, in: repoRoot))
     }
 
-    /// Anchors a checkpoint commit under ``checkpointRefPrefix`` so it survives garbage
-    /// collection.
-    ///
-    /// Without a ref, the commit from ``createCheckpoint(repoRoot:)`` is unreachable and a
-    /// `git gc` — which git runs on its own schedule — will prune it, silently turning a
-    /// reviewable turn into a dangling SHA.
-    ///
-    /// - Parameters:
-    ///   - commit: The checkpoint commit SHA.
-    ///   - id: The checkpoint's identifier, used as the ref's last path component.
-    ///   - repoRoot: The repository holding the commit.
-    /// - Returns: `true` when the ref was written.
+    /// Anchors `commit` at ``checkpointRefPrefix`` + `id` so git's own `gc` cannot prune it;
+    /// `true` when the ref was written.
     @discardableResult
     static func anchorCheckpoint(_ commit: String, id: String, repoRoot: URL) -> Bool {
         guard let id = sanitizedCheckpointID(id) else { return false }
@@ -113,23 +92,15 @@ public extension Git {
         }
     }
 
-    /// The unified diff between two checkpoints, optionally narrowed to one path.
-    ///
-    /// - Parameters:
-    ///   - from: The earlier checkpoint commit (or any commit-ish).
-    ///   - to: The later checkpoint commit, or `nil` to diff against the **live working tree** —
-    ///     which is what the turn currently in progress needs, having no closing snapshot yet.
-    ///   - path: A repo-relative path to narrow to, or `nil` for every change.
-    ///   - repoRoot: The repository to diff in.
-    /// - Returns: The unified diff, empty when nothing changed, or `nil` on failure.
+    /// The unified diff from checkpoint `from` to `to`, or to the **live working tree** when `to`
+    /// is nil (a turn still in progress), optionally narrowed to one repo-relative `path`.
+    /// Empty when nothing changed, nil on failure.
     static func checkpointDiff(from: String, to: String?, path: String? = nil, repoRoot: URL) -> String? {
-        // Working-tree comparison: diff directly and splice in untracked files, rather than
-        // snapshotting. Building an ephemeral checkpoint here re-hashed the ENTIRE working tree
-        // and wrote an unreferenced tree+commit into .git/objects on every git tick that a
-        // still-open turn tab refreshed on.
+        // Working-tree comparison: diff directly and splice in untracked files. Must not
+        // snapshot: that re-hashes the whole tree and writes objects on every refresh.
         guard let target = to else {
             var args = ["-c", "core.quotePath=false", "diff", "--no-color", from]
-            if let path { args += ["--", path] }   // the two-commit branch below always did; this one forgot
+            if let path { args += ["--", path] }   // narrowed like the two-commit branch below
             var diff = run(args, in: repoRoot) ?? ""
             let untracked = run(["-c", "core.quotePath=false", "ls-files", "--others",
                                  "--exclude-standard", "-z"], in: repoRoot) ?? ""
@@ -144,16 +115,9 @@ public extension Git {
         return run(args, in: repoRoot)
     }
 
-    /// The files that changed between two checkpoints.
-    ///
-    /// This is the exact answer to "what did this turn touch", where walking the transcript
-    /// only reports what the agent *said* it touched.
-    ///
-    /// - Parameters:
-    ///   - from: The earlier checkpoint commit.
-    ///   - to: The later checkpoint commit, or `nil` to compare against the live working tree.
-    ///   - repoRoot: The repository to diff in.
-    /// - Returns: Repo-relative paths with their change kind, in git's order.
+    /// The repo-relative files changed from checkpoint `from` to `to` (or the live working tree
+    /// when nil), with their kind, in git's order — what a turn actually touched, not what the
+    /// transcript says it touched.
     static func checkpointChangedFiles(from: String, to: String?,
                                        repoRoot: URL) -> [(path: String, kind: GitChangeKind)] {
         // Same reasoning as `checkpointDiff`: compare against the working tree directly and add
@@ -191,15 +155,8 @@ public extension Git {
         }
     }
 
-    /// Drops the oldest anchors, keeping the `keeping` newest by commit time.
-    ///
-    /// Checkpoints accumulate one per agent turn, and each pins a whole tree; without pruning
-    /// a long-running repo would keep every tree it ever saw alive.
-    ///
-    /// - Parameters:
-    ///   - keeping: How many checkpoints to retain. Values below zero are treated as zero.
-    ///   - repoRoot: The repository to prune.
-    /// - Returns: The ids that were dropped.
+    /// Drops the oldest anchors, keeping the `keeping` (at least 0) newest by commit time, and
+    /// returns the dropped ids. Each checkpoint pins a whole tree, so they must not accumulate.
     @discardableResult
     static func pruneCheckpoints(keeping: Int, repoRoot: URL) -> [String] {
         // Newest first, so everything past the keep count is the tail to drop.

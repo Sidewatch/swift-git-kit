@@ -12,28 +12,30 @@ import Foundation
 
 /// One commit from `git log`.
 public struct GitCommit: Equatable, Sendable {
-    public let hash: String        // full 40-char SHA
-    public let shortHash: String   // abbreviated SHA
+    /// The full 40-character SHA.
+    public let hash: String
+    /// The abbreviated SHA.
+    public let shortHash: String
+    /// The author's name.
     public let author: String
-    public let date: String        // YYYY-MM-DD (author date)
-    public let subject: String     // first line of the message
+    /// The author date as `YYYY-MM-DD`.
+    public let date: String
+    /// The first line of the message.
+    public let subject: String
 
+    /// Creates a commit record.
     public init(hash: String, shortHash: String, author: String, date: String, subject: String) {
         self.hash = hash; self.shortHash = shortHash; self.author = author
         self.date = date; self.subject = subject
     }
 }
 
+/// Commit history and past file contents.
 public extension Git {
 
-    /// The most recent commits on the current branch, newest first.
+    /// Up to `limit` of the most recent commits on the current branch, newest first.
     ///
-    /// Uses a `%x1f` (unit-separator) delimited pretty-format so commit subjects with any
-    /// punctuation parse cleanly. Records are newline-separated.
-    ///
-    /// - Parameters:
-    ///   - root: The repository root (see ``repoRoot(for:)``).
-    ///   - limit: Maximum commits to return.
+    /// Fields are `%x1f`-delimited so a subject with any punctuation parses cleanly.
     static func log(repoRoot root: URL, limit: Int = 300) -> [GitCommit] {
         guard let out = run(["log", "-n", "\(max(1, limit))", "--date=short",
                              "--pretty=format:\(Self.commitFormat)"], in: root) else { return [] }

@@ -20,10 +20,15 @@ public struct WorktreeSummary: Sendable, Equatable {
     /// The worktree this summarizes.
     public let worktree: GitWorktree
 
+    /// Files added to the index.
     public let added: Int
+    /// Tracked files modified.
     public let modified: Int
+    /// Tracked files deleted.
     public let deleted: Int
+    /// Files git does not track yet.
     public let untracked: Int
+    /// Files renamed.
     public let renamed: Int
 
     /// Line insertions in the working tree vs HEAD (from ``Git/diffStat(repoRoot:)``;
@@ -38,6 +43,7 @@ public struct WorktreeSummary: Sendable, Equatable {
     /// Whether the worktree has any uncommitted change worth reviewing.
     public var isDirty: Bool { changeCount > 0 }
 
+    /// Creates a summary from counts already tallied; ``make(worktree:status:insertions:deletions:)`` tallies them.
     public init(worktree: GitWorktree, added: Int = 0, modified: Int = 0,
                 deleted: Int = 0, untracked: Int = 0, renamed: Int = 0,
                 insertions: Int = 0, deletions: Int = 0) {

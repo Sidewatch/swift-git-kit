@@ -34,15 +34,11 @@ public enum GitHubCLI {
     /// Whether `gh` is available on this machine.
     public static var isAvailable: Bool { executablePath() != nil }
 
-    /// Opens the branch's EXISTING pull request in the browser (`gh pr view --web`).
+    /// Opens the branch's EXISTING pull request in the browser (`gh pr view --web`). Blocking.
     ///
-    /// It used to fall back to `gh pr create --web` when the branch had no pull request yet.
-    /// That was removed on 11 Sep 2026: opening a create-PR page is the start of authoring, and
-    /// authoring belongs to the agent in the terminal, which can write the title and body from
-    /// the work it just did. This reads and jumps; it never begins a pull request.
-    ///
-    /// False when `gh` is unavailable, the branch has no pull request, or the command failed.
-    /// Blocking — call off-main.
+    /// Never falls back to `gh pr create --web`: authoring a pull request belongs to the agent in
+    /// the terminal, which can write it from the work it just did. False when `gh` is missing,
+    /// the branch has no pull request, or the command failed.
     @discardableResult
     public static func openPullRequestInBrowser(cwd: URL) -> Bool {
         guard let gh = executablePath() else { return false }

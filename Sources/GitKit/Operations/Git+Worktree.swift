@@ -11,18 +11,11 @@
 import Foundation
 import FoundationExtensions
 
+/// Branch identity and worktree enumeration.
 public extension Git {
 
-    /// The short name of the branch currently checked out at `root`.
-    ///
-    /// Runs `git rev-parse --abbrev-ref HEAD`. On a detached `HEAD` (where
-    /// git reports the literal name `"HEAD"`) this falls back to the short
-    /// commit SHA via `git rev-parse --short HEAD`, so the result is always
-    /// something meaningful to display.
-    ///
-    /// - Parameter root: The repository root (see ``repoRoot(for:)``).
-    /// - Returns: The branch name, the short SHA when detached, or `nil` when
-    ///   git fails (e.g. an unborn `HEAD` in a repository with no commits).
+    /// The short name of the branch checked out at `root`, the short SHA on a detached `HEAD`,
+    /// or `nil` when git fails (e.g. an unborn `HEAD` in a repository with no commits).
     static func currentBranch(repoRoot root: URL) -> String? {
         guard let name = run(["rev-parse", "--abbrev-ref", "HEAD"], in: root)?
             .trimmed, !name.isEmpty else { return nil }
@@ -33,18 +26,11 @@ public extension Git {
         return sha
     }
 
-    /// All worktrees of the repository containing `root`, main worktree first.
+    /// All worktrees of the repository containing `root` (any worktree, main or linked), main
+    /// first; `[]` on failure.
     ///
-    /// Parses `git worktree list --porcelain`, whose blank-line-separated
-    /// entries carry `worktree <path>` plus optional `HEAD <sha>`,
-    /// `branch refs/heads/<name>`, `detached`, and `bare` attribute lines.
-    /// Branch refs have their `refs/heads/` prefix stripped; detached and
-    /// bare entries surface with a `nil` branch. Git always lists the main
-    /// worktree first, which is what ``GitWorktree/isMain`` reflects.
-    ///
-    /// - Parameter root: Any worktree's root (main or linked); the full set
-    ///   is returned regardless of which worktree the call runs in.
-    /// - Returns: One ``GitWorktree`` per working tree, or `[]` on failure.
+    /// Parses `git worktree list --porcelain`. Branches lose their `refs/heads/` prefix; detached
+    /// and bare entries have a `nil` branch. git lists the main worktree first (``GitWorktree/isMain``).
     static func worktrees(repoRoot root: URL) -> [GitWorktree] {
         guard let out = run(["worktree", "list", "--porcelain"], in: root) else { return [] }
         var result: [GitWorktree] = []
@@ -76,15 +62,10 @@ public extension Git {
         return result
     }
 
-    /// Every worktree of the repository containing `root`, each paired with a
-    /// per-kind tally of its uncommitted changes — the data for a parallel-agent
-    /// review rail.
+    /// Every worktree of the repository containing `root`, main first, each with a tally of its
+    /// uncommitted changes — the data for a parallel-agent review rail.
     ///
-    /// Runs one `git status` per worktree (against that worktree's own path), so
-    /// the cost scales with the number of worktrees. Call off-main.
-    ///
-    /// - Parameter root: Any worktree's root; the full set is summarized.
-    /// - Returns: One ``WorktreeSummary`` per worktree, main first, or `[]` on failure.
+    /// Runs `git status` and a diff stat per worktree, so cost scales with their number. Call off-main.
     static func worktreeSummaries(repoRoot root: URL) -> [WorktreeSummary] {
         worktrees(repoRoot: root).map {
             let stat = diffStat(repoRoot: $0.path)
@@ -93,18 +74,11 @@ public extension Git {
         }
     }
 
-    /// Removes a linked worktree (`git worktree remove`). **Destructive** — it
-    /// deletes the worktree's directory. A plain call refuses (returns `false`)
-    /// when the worktree has uncommitted changes, submodules, **or is locked**;
-    /// git also refuses to remove the main worktree.
+    /// Removes a linked worktree and **deletes its directory** (`git worktree remove`); `true` on
+    /// success. Refuses a dirty, submodule-bearing or locked worktree, and always the main one.
     ///
-    /// - Parameters:
-    ///   - worktree: the linked worktree's path (from ``GitWorktree/path``).
-    ///   - root: any worktree's root (the command locates the shared repo).
-    ///   - force: when `true`, passes `--force --force`, which overrides *both* a
-    ///     dirty tree and a lock (git requires the doubled flag to override a
-    ///     lock). Discards uncommitted changes.
-    /// - Returns: `true` on success.
+    /// `force` passes `--force --force` — git needs the doubled flag to override a lock — and
+    /// discards uncommitted changes.
     @discardableResult
     static func removeWorktree(_ worktree: URL, repoRoot root: URL, force: Bool = false) -> Bool {
         var args = ["worktree", "remove"]

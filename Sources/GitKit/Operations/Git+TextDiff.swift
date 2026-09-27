@@ -10,6 +10,7 @@
 
 import Foundation
 
+/// Diffs of texts outside any repository.
 extension Git {
     /// The unified diff from `old` to `new`, headed `a/<oldName>` and `b/<newName>`, through
     /// `git diff --no-index` — the same engine and output shape as every other diff git gives

@@ -10,6 +10,7 @@
 
 import Foundation
 
+/// Per-line diff markers, removed-line text and diff stats.
 public extension Git {
 
     /// Per-line change kind for one file versus `HEAD`, for editor gutter markers.
@@ -23,17 +24,9 @@ public extension Git {
         lineDiff(for: file, repoRoot: root).marks
     }
 
-    /// Both gutter maps for one file versus `HEAD` — the per-line change kinds
-    /// *and* the removed-line text — from a **single** `git diff --unified=0`
-    /// run, where calling ``lineChanges(for:repoRoot:)`` and
-    /// ``removedLines(for:repoRoot:)`` separately would spawn (and parse) the
-    /// identical diff twice.
-    ///
-    /// - Returns: `marks` exactly as ``lineChanges(for:repoRoot:)`` returns it
-    ///   (added/modified lines keyed by their 1-based working-copy line; a pure
-    ///   deletion marks the surviving line just below), and `removed` exactly as
-    ///   ``removedLines(for:repoRoot:)`` returns it (removed text keyed by the
-    ///   1-based new-file line it renders above).
+    /// Both gutter maps for one file versus `HEAD` from a **single** `git diff --unified=0` run:
+    /// `marks` as ``lineChanges(for:repoRoot:)`` returns it and `removed` as
+    /// ``removedLines(for:repoRoot:)`` does, where calling both would run the same diff twice.
     static func lineDiff(for file: URL, repoRoot root: URL) -> (marks: [Int: GitChangeKind], removed: [Int: [String]]) {
         let rel = relativePath(file, root: root)
         guard let diff = run(["diff", "--unified=0", "--no-color", "HEAD", "--", rel], in: root) else {
@@ -47,10 +40,9 @@ public extension Git {
         func flush() {
             if !pending.isEmpty { removed[anchor, default: []].append(contentsOf: pending); pending = [] }
         }
-        // `components(separatedBy:)` (a UTF-16 split), never `split(separator: "\n")`: in Swift
-        // `"\r\n"` is ONE Character, so a Character split never divided the content lines of a
-        // CRLF file — a second hunk header rode along inside the first hunk's removed text and
-        // the marks stopped after hunk one (18 Sep 2026).
+        // `components(separatedBy:)` (a UTF-16 split), never `split(separator: "\n")`: `"\r\n"`
+        // is ONE Character, so a Character split leaves a CRLF file's lines joined and the
+        // marks stop after the first hunk.
         for line in diff.components(separatedBy: "\n") {
             if line.hasPrefix("@@") {
                 flush()
@@ -75,32 +67,22 @@ public extension Git {
         return (marks, removed)
     }
 
-    /// Unified diff presenting an untracked file as all-new content — what
-    /// `git diff HEAD` cannot show (untracked files are invisible to it).
+    /// A unified diff presenting an untracked file as all-new content, which `git diff HEAD`
+    /// cannot show; `""` when `file` is outside `root` or unreadable.
     ///
-    /// Runs `git diff --no-index /dev/null <path>`, which exits 1 when the
-    /// inputs differ — its normal "found a difference" result, hence the widened
-    /// exit contract. The output is a regular unified diff (`diff --git` header,
-    /// `--- /dev/null`, `+++ b/<path>`, one all-additions hunk), so it splices
-    /// cleanly into any combined-diff rendering.
-    ///
-    /// - Returns: The synthesized diff, or `""` when `file` is not under `root`
-    ///   or is missing/unreadable.
+    /// Runs `git diff --no-index /dev/null <path>` (exit 1 means "differs", so it is accepted).
+    /// The output is a regular diff that splices into any combined-diff rendering.
     static func untrackedDiff(for file: URL, repoRoot root: URL) -> String {
         guard let rel = relativePathIfUnderRoot(file, root: root) else { return "" }
         return run(["-c", "core.quotePath=false", "diff", "--no-color", "--no-index", "--", "/dev/null", rel],
                    in: root, allowedStatuses: [1]) ?? ""
     }
 
-    /// Per-file changed-line maps for the whole working tree versus `HEAD`, from
-    /// one `git diff --unified=0 HEAD` — one process spawn instead of one
-    /// ``lineChanges(for:repoRoot:)`` spawn per changed file.
+    /// ``lineChanges(for:repoRoot:)`` for every changed file versus `HEAD`, from one process
+    /// instead of one per file.
     ///
-    /// Keys are repository-relative paths (the new path for a rename; the old
-    /// path for a deletion); each value matches what
-    /// ``lineChanges(for:repoRoot:)`` returns for that file. Untracked files are
-    /// absent (they're absent from `git diff`), matching the per-file call's
-    /// empty result for them.
+    /// Keys are repository-relative paths (the new path for a rename, the old for a deletion).
+    /// Untracked files are absent, as they are from `git diff`.
     static func lineChangesAll(repoRoot root: URL) -> [String: [Int: GitChangeKind]] {
         // core.quotePath=false keeps non-ASCII paths verbatim in the ---/+++
         // headers instead of C-style octal-escaped.
@@ -114,9 +96,8 @@ public extension Git {
             let p = (s.hasPrefix("a/") || s.hasPrefix("b/")) ? s.dropFirst(2) : s
             return String(p)
         }
-        // A UTF-16 split, as in `lineDiff`: with a Character split the CRLF file's last content
-        // line swallowed the next `diff --git` header and the following file's hunks were filed
-        // under the CRLF file's path.
+        // A UTF-16 split, as in `lineDiff`: a Character split lets a CRLF file's last line swallow
+        // the next `diff --git` header, filing the following file's hunks under the wrong path.
         for line in diff.components(separatedBy: "\n") {
             if line.hasPrefix("diff --git ") { inHunk = false; aPath = nil; bPath = nil; continue }
             if !inHunk, line.hasPrefix("--- ") { aPath = headerPath(line.dropFirst(4)); continue }
@@ -133,15 +114,8 @@ public extension Git {
         return all
     }
 
-    /// Removed (old) lines to ghost inline as phantom rows, for a Cursor-style
-    /// inline diff.
-    ///
-    /// Parses `git diff --unified=0`. Removed lines are keyed by the 1-based
-    /// new-file line they should render *above* (for a pure deletion, the line
-    /// just below where the content used to be).
-    ///
-    /// - Returns: A map from 1-based new-file line number to the removed lines'
-    ///   text, in order.
+    /// Removed lines to ghost inline as phantom rows, keyed by the 1-based new-file line they
+    /// render *above* (for a pure deletion, the line just below the removal), text in order.
     static func removedLines(for file: URL, repoRoot root: URL) -> [Int: [String]] {
         lineDiff(for: file, repoRoot: root).removed
     }
@@ -157,19 +131,10 @@ public extension Git {
         return parseNumstat(out)
     }
 
-    /// Total insertions/deletions between two commits, or between one commit and the
-    /// working tree.
+    /// Total insertions/deletions from commit `from` to `to`, or to the live working tree when
+    /// `to` is nil (so the result moves as the tree is edited).
     ///
-    /// Parses `git diff --numstat <from> [<to>]`. Omitting `to` compares `from` against
-    /// the working tree as it stands, so the result moves as the tree is edited; pass
-    /// both ends for a span that cannot change. Untracked files are not counted (they
-    /// are absent from `git diff`); binary files contribute nothing. Returns `(0, 0)`
-    /// on any failure.
-    ///
-    /// - Parameters:
-    ///   - root: The repository root.
-    ///   - from: The commit the span starts at.
-    ///   - to: The commit it ends at, or `nil` to compare against the working tree.
+    /// Untracked and binary files count nothing; `(0, 0)` on any failure.
     static func diffStat(repoRoot root: URL, from: String, to: String?) -> (insertions: Int, deletions: Int) {
         var args = ["diff", "--numstat", "--no-color", from]
         if let to { args.append(to) }

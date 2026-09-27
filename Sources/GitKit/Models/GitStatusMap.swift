@@ -12,31 +12,23 @@
 
 import Foundation
 
-/// A snapshot of `git status` shaped for O(1) per-row lookups by a file tree or a
-/// tab bar: absolute file path → change kind, plus the set of every ancestor
-/// directory of a changed file (so a collapsed folder can show a "contains
-/// changes" dot).
+/// A snapshot of `git status` shaped for O(1) per-row lookups by a file tree or tab bar:
+/// absolute path → change kind, plus every ancestor directory of a changed file (for a
+/// collapsed folder's "contains changes" dot). Deleted files are excluded.
 ///
-/// Deleted files are excluded — they have no row in a tree and no tab worth
-/// tinting; they belong in a Changes list.
-///
-/// Build it off-main from ``Git/status(repoRoot:)`` output. Keys are inserted
-/// under every alias of the repo root (standardized, symlink-resolved, and
-/// `/private`-prefixed) so the macOS `/private/var` ↔ `/var` aliasing never
-/// makes a lookup miss — the same gotcha GitKit's canonical-path handling
-/// reconciles elsewhere.
+/// Build it off-main from ``Git/status(repoRoot:)``. Keys are inserted under every alias of the
+/// repo root (standardized, symlink-resolved, `/private`-prefixed) so `/var` aliasing never misses.
 public struct GitStatusMap: Equatable, Sendable {
 
+    /// The map with no changed files.
     public static let empty = GitStatusMap(kinds: [:], changedDirs: [], canonicalPaths: [])
 
     /// Absolute file path → change kind (no `.deleted` entries).
     private let kinds: [String: GitChangeKind]
     /// Absolute path of every directory containing (at any depth) a changed file.
     private let changedDirs: Set<String>
-    /// ONE path per changed file (the standardized-root alias). `kinds` keys each
-    /// file under every root alias for O(1) lookups — correct for lookups, wrong
-    /// as a file LIST: a /tmp repo listed every file twice (/tmp + /private/tmp),
-    /// doubling search rows and making targeted replace report phantom failures.
+    /// ONE path per changed file (the standardized-root alias). Must be used for any file
+    /// LIST: `kinds` holds each file under every root alias, so listing its keys doubles files.
     private let canonicalPaths: [String]
 
     init(kinds: [String: GitChangeKind], changedDirs: Set<String>, canonicalPaths: [String]) {
@@ -81,13 +73,9 @@ public struct GitStatusMap: Equatable, Sendable {
         let canonicalRoot = repoRoot.standardizedFileURL.path
         var canonical: [String] = []
         for entry in live {
-            // Defensive: without `-uall`, `git status` collapses an untracked
-            // directory to a single trailing-slash entry ("?? NewFeature/").
-            // GitKit passes -uall, but handle the directory form anyway so older
-            // cached outputs still decorate the folder + its ancestors (a
-            // trailing-slash key could never match a lookup path, and
-            // `deletingLastPathComponent` on "NewFeature/" returns "" — the entry
-            // used to vanish entirely).
+            // Defensive: without `-uall`, `git status` collapses an untracked directory to
+            // one trailing-slash entry ("?? NewFeature/"). Such a key never matches a lookup and
+            // `deletingLastPathComponent` of it is "", so it is decorated as a folder instead.
             let isDirEntry = entry.path.hasSuffix("/")
             let path = isDirEntry ? String(entry.path.dropLast()) : entry.path
             guard !path.isEmpty else { continue }

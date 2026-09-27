@@ -17,6 +17,7 @@ import Foundation
 /// content and are skipped; `@@` headers render on both sides and restart the numbering.
 public enum SideBySideDiff {
 
+    /// The two aligned columns for a unified `diff`: `left` the old side, `right` the new.
     public static func rows(from diff: String) -> (left: [SideBySideRow], right: [SideBySideRow]) {
         var builder = Builder()
         var lines = diff.components(separatedBy: "\n")
@@ -34,6 +35,7 @@ public enum SideBySideDiff {
         var pendingRemoved: [String] = [], pendingAdded: [String] = []
         var inHunk = false
 
+        /// Feeds one diff line into the columns, pairing removed/added runs as they close.
         mutating func take(_ raw: String) {
             // A multi-file diff restarts here. Without leaving hunk state, the NEXT file's
             // index/---/+++ headers would be treated as content and render as added/removed
