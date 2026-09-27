@@ -16,14 +16,13 @@ let package = Package(
     dependencies: [
         // The shared subprocess runner. GitKit used to hand-roll two near-identical
         // Process/Pipe runners; the drain-both-streams contract lives in one place now.
-        .package(path: "../swift-process-runner"),
         .package(path: "../swift-foundation-extensions"),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         .target(
             name: "GitKit",
-            dependencies: [.product(name: "ProcessRunner", package: "swift-process-runner"),
+            dependencies: [.product(name: "ProcessRunner", package: "swift-foundation-extensions"),
                            .product(name: "FoundationExtensions", package: "swift-foundation-extensions")],
             path: "Sources",
             resources: [.process("GitKit/Localizable.xcstrings")],
