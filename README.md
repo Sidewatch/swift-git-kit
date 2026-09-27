@@ -15,7 +15,7 @@ A thin, synchronous Swift wrapper over the `git` command-line tool — repositor
 - 🌳 **Worktree enumeration** — `Git.worktrees(repoRoot:)` lists every `GitWorktree` (path, branch, main/linked) via `git worktree list --porcelain`, with `isCurrent(relativeTo:)` for symlink-safe "which one am I in?" checks
 - 📊 **Worktree change summaries** — `Git.worktreeSummaries(repoRoot:)` pairs each worktree with a per-kind tally of its uncommitted changes (`WorktreeSummary` — `added`/`modified`/`deleted`/`untracked`/`renamed`, `changeCount`, `isDirty`, plus `insertions`/`deletions`), for a parallel-agent review rail that shows "which worktree has unreviewed work". `Git.removeWorktree(_:repoRoot:force:)` archives a finished linked worktree (`git worktree remove`; refuses a dirty tree unless forced)
 - 🗺️ **Status lookup map** — `GitStatusMap.build(status:repoRoot:)` turns a status list into O(1) per-path lookups: `kind(for:)` for a file's change kind and `directoryContainsChanges(_:)` for "does this collapsed folder hold changes?", keyed under every `/private/var` ↔ `/var` alias of the repo root so lookups never miss. `GitChangeKind.letter` gives the single-letter badge (A/M/D/R/U)
-- 🪶 **Zero dependencies** — Foundation only; shells out to the system `git`
+- 🪶 **Small** — Foundation plus swift-foundation-extensions (FoundationExtensions, ProcessRunner); shells out to the system `git`
 - 🧪 **Fully tested** — integration tests against throwaway repos (including linked and detached worktrees) plus direct unit tests of the diff-hunk and relative-time parsers, and the status-map path keying / ancestor marking / alias resolution
 
 ## Requirements
