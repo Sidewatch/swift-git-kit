@@ -39,8 +39,10 @@ public extension Git {
         guard scratch.read(tree: base, in: root) else { return .failure(.failed(stderr: "could not read \(base) into the commit index")) }
         if case .failure(let error) = stage(paths, into: scratch, base: base, repoRoot: root) { return .failure(error) }
 
+        // The one call that runs the repository's hooks: a person committing expects their
+        // pre-commit hook to run. The stage and the sync around it run none.
         let commit = runCapturingError(
-            ["commit", "-q", "-m", message], in: root, environment: scratch.environment, timeout: longTimeout)
+            ["commit", "-q", "-m", message], in: root, environment: scratch.environment, timeout: longTimeout, hooks: true)
         guard commit.succeeded else { return .failure(.failed(stderr: commit.message)) }
         _ = run(["reset", "-q", "--"] + paths, in: root, timeout: longTimeout)
         guard let head = run(["rev-parse", "HEAD"], in: root)?.trimmed, !head.isEmpty else {

@@ -48,16 +48,38 @@ public enum Git {
     ///   `git diff` form otherwise refreshes stat-stale entries and writes the index; the user's
     ///   own next git command refreshes it instead. `--name-status` and `--raw` list a stat-stale
     ///   file as `M` under this setting; patch and `--numstat` forms do not.
+    /// - `core.fsmonitor=false`: a repository's `core.fsmonitor` names a COMMAND git runs on every
+    ///   status and diff to ask what changed. A checkout's own `.git/config` can set it, so a
+    ///   status over a cloned repository would run whatever the clone chose; the setting is
+    ///   off for every call.
     ///
-    /// Hooks a call runs (`commit`) inherit these.
+    /// The env form (`GIT_CONFIG_COUNT` / `KEY_n` / `VALUE_n`) outranks every config file.
+    /// Hooks a call runs (`commit`) inherit these; ``environment(hooks:)`` adds the hooks rule.
     static let fixedEnvironment: [String: String] = [
         "GIT_LITERAL_PATHSPECS": "1",
         "GIT_OPTIONAL_LOCKS": "0",
         "GIT_TERMINAL_PROMPT": "0",
-        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_COUNT": "2",
         "GIT_CONFIG_KEY_0": "diff.autoRefreshIndex",
         "GIT_CONFIG_VALUE_0": "false",
+        "GIT_CONFIG_KEY_1": "core.fsmonitor",
+        "GIT_CONFIG_VALUE_1": "false",
     ]
+
+    /// ``fixedEnvironment``, with `core.hooksPath=/dev/null` added unless `hooks` is true.
+    ///
+    /// A repository's hooks are its own executable code: `post-index-change` runs on a `git add`,
+    /// `post-checkout` on a restore, and a clone can ship any of them. A read, a stage, a restore
+    /// or a checkpoint through this package never runs one. `commit` does — a person expects
+    /// their pre-commit hook to run when they commit — so it alone passes `hooks: true`.
+    static func environment(hooks: Bool) -> [String: String] {
+        guard !hooks else { return fixedEnvironment }
+        var env = fixedEnvironment
+        env["GIT_CONFIG_COUNT"] = "3"
+        env["GIT_CONFIG_KEY_2"] = "core.hooksPath"
+        env["GIT_CONFIG_VALUE_2"] = "/dev/null"
+        return env
+    }
 
     /// Inherited variables no call may see: a `GIT_DIR` or `GIT_INDEX_FILE` exported by the
     /// launching shell would redirect every call to another repository or index, and the
@@ -95,18 +117,20 @@ public enum Git {
 
     /// Runs `git <args>` like ``run(_:in:allowedStatuses:timeout:)`` with `environment` layered
     /// over ``fixedEnvironment`` (e.g. `GIT_INDEX_FILE` for a scratch index — a caller's variable
-    /// wins), and `input` written to its stdin.
+    /// wins), and `input` written to its stdin. `hooks` lets the repository's hooks run; off
+    /// unless the call is the person's own commit (``environment(hooks:)``).
     ///
-    /// stderr is dropped; callers want output or `nil`. ``runCapturingError(_:in:environment:timeout:input:)``
+    /// stderr is dropped; callers want output or `nil`. ``runCapturingError(_:in:environment:timeout:input:hooks:)``
     /// keeps it.
     public static func run(
         _ args: [String], in dir: URL,
         environment: [String: String],
         allowedStatuses: Set<Int32> = [],
         timeout: TimeInterval? = defaultTimeout,
-        input: Data? = nil
+        input: Data? = nil,
+        hooks: Bool = false
     ) -> String? {
-        let result = runCapturingError(args, in: dir, environment: environment, timeout: timeout, input: input)
+        let result = runCapturingError(args, in: dir, environment: environment, timeout: timeout, input: input, hooks: hooks)
         guard result.launched, !result.timedOut else { return nil }
         guard result.status == 0 || allowedStatuses.contains(result.status) else { return nil }
         return result.stdout
@@ -117,18 +141,19 @@ public enum Git {
     /// For the calls whose failure the user must read in git's own words (a commit refused by a
     /// hook). Goes through ``ProcessRunner``, which drains stdout and stderr concurrently: an
     /// undrained stderr pipe deadlocks once git writes ~64 KB of warnings. The process runs under
-    /// ``fixedEnvironment`` with ``strippedVariables`` removed and `environment` layered last.
+    /// ``environment(hooks:)`` with ``strippedVariables`` removed and `environment` layered last.
     public static func runCapturingError(
         _ args: [String], in dir: URL,
         environment: [String: String] = [:],
         timeout: TimeInterval? = defaultTimeout,
-        input: Data? = nil
+        input: Data? = nil,
+        hooks: Bool = false
     ) -> GitRunResult {
         let result = ProcessRunner.run(
             executable, args,
             directory: dir,
             input: input,
-            environment: fixedEnvironment.merging(environment) { _, caller in caller },
+            environment: Self.environment(hooks: hooks).merging(environment) { _, caller in caller },
             removing: strippedVariables,
             timeout: timeout)
         return GitRunResult(

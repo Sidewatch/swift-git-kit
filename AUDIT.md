@@ -195,6 +195,24 @@ re-probe these; the tests pin them.
   `input:`; `Git.runCapturingError` returns `GitRunResult` (status, stdout, stderr, `message`).
 - `Git.clone` goes through `runCapturingError` (same environment and `longTimeout`).
 
+## Security review — 9 Oct 2026
+
+- **A checkout's own code ran on every status.** `core.fsmonitor` in a repository's `.git/config`
+  names a command git runs on each status and diff; `.git/hooks/post-index-change` runs on a `git
+  add`. A clone carries both, so opening a repository ran whatever it chose, before anyone read a
+  line. `Git.fixedEnvironment` now sets `core.fsmonitor=false` for every call (`GIT_CONFIG_KEY_1`,
+  the env form that outranks every file) and `Git.environment(hooks:)` adds `core.hooksPath=/dev/null`
+  unless the call passes `hooks: true`; `run(_:in:environment:…)` and `runCapturingError` take the
+  flag, and `Git.commit` alone passes it — a person committing expects their pre-commit hook.
+  Stage, unstage, restore, checkpoints (plumbing), clone and every read run none.
+  `GitHookIsolationTests`: a monitor command that touches a marker never fires through the package
+  but does through bare git (so the check is not vacuous); `post-index-change` and `post-checkout`
+  hooks stay silent through stage/unstage/discard while `pre-commit` fires on `Git.commit`; the
+  environment names both rules. Mutants: the fsmonitor value blanked — the marker appears;
+  `environment(hooks:)` always returning the base — the index hook fires; `commit` with `hooks:
+  false` — the pre-commit marker is missing. `testAFailingPreCommitHookReportsItsOwnWords` stays
+  green.
+
 ## Known non-issues (do not "fix" these again)
 
 - `Git.remoteURL(repoRoot:remote:)` has no caller in Sidewatch — public API, kept.
@@ -206,8 +224,9 @@ re-probe these; the tests pin them.
 - Under `diff.autoRefreshIndex=false` a raw `diff --name-status`/`--raw` lists a stat-stale file
   as `M`; that is git's format behaviour, and the package's own `--name-status` path refreshes its
   scratch index first.
-- Hooks a `commit` runs inherit `GIT_LITERAL_PATHSPECS=1` and `diff.autoRefreshIndex=false`; a
-  hook that globs its own pathspecs would see literal matching. Documented in `Git.run`.
+- Hooks a `commit` runs inherit `GIT_LITERAL_PATHSPECS=1`, `diff.autoRefreshIndex=false` and
+  `core.fsmonitor=false`; a hook that globs its own pathspecs would see literal matching. Documented in `Git.run`.
+- `git worktree add` and `git clone` would run `post-checkout`; under `core.hooksPath=/dev/null` they do not. Deliberate: only the person's commit runs a checkout's hooks.
 
 ## History
 
@@ -218,3 +237,4 @@ re-probe these; the tests pin them.
   inherited environment, lossy decode, timeouts, hostile config, unborn HEAD, deletion key, status
   codes, pseudo-branches, in-progress operations, commit, discard, checkpoints, blob hashes,
   out-of-root reads; 199 tests, ~155 s.
+- 9 Oct 2026 — security review: `core.fsmonitor=false` on every call, `core.hooksPath=/dev/null` on every call but `Git.commit` (section above); 202 tests.
