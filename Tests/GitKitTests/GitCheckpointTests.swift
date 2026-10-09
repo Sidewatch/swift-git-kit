@@ -224,6 +224,9 @@ final class GitCheckpointTests: XCTestCase {
                     .first(where: { $0.hasPrefix("count:") })?
                     .split(separator: " ").last.map(String.init) ?? "0") ?? 0
         }
+        // One warm-up: marking the untracked file intent-to-add stores the empty blob once if
+        // the repository lacks it. That is one object, ever — not one snapshot per tick.
+        _ = Git.checkpointChangedFiles(from: start, to: nil, repoRoot: root)
         let before = objectCount()
         for _ in 0..<3 {
             _ = Git.checkpointChangedFiles(from: start, to: nil, repoRoot: root)

@@ -30,44 +30,112 @@ public enum Git {
     private static let lock = NSLock()
     private nonisolated(unsafe) static var storedExecutable = "/usr/bin/git"
 
+    /// Seconds a read-only call may run before it is terminated and reported as failed (`nil`).
+    public static let defaultTimeout: TimeInterval = 60
+
+    /// Seconds a mutating or network call may run — commit, add, restore, checkpoint capture,
+    /// clone, fetch — before it is terminated.
+    public static let longTimeout: TimeInterval = 600
+
+    /// Variables every call runs under, whatever the user's configuration says.
+    ///
+    /// - `GIT_LITERAL_PATHSPECS`: `app/[id]/page.tsx` names that file, not every `app/?/page.tsx`,
+    ///   and `:colon.txt` is a path, not pathspec magic. Harmless for every subcommand used here.
+    /// - `GIT_OPTIONAL_LOCKS=0`: `git status` must not rewrite `.git/index` on a read — an
+    ///   agent's own `git commit` racing that lock fails.
+    /// - `GIT_TERMINAL_PROMPT=0`: never hang on a credential prompt nobody can answer.
+    /// - `diff.autoRefreshIndex=false` (the env form of `-c`, so raw calls get it too): every
+    ///   `git diff` form otherwise refreshes stat-stale entries and writes the index; the user's
+    ///   own next git command refreshes it instead. `--name-status` and `--raw` list a stat-stale
+    ///   file as `M` under this setting; patch and `--numstat` forms do not.
+    ///
+    /// Hooks a call runs (`commit`) inherit these.
+    static let fixedEnvironment: [String: String] = [
+        "GIT_LITERAL_PATHSPECS": "1",
+        "GIT_OPTIONAL_LOCKS": "0",
+        "GIT_TERMINAL_PROMPT": "0",
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "diff.autoRefreshIndex",
+        "GIT_CONFIG_VALUE_0": "false",
+    ]
+
+    /// Inherited variables no call may see: a `GIT_DIR` or `GIT_INDEX_FILE` exported by the
+    /// launching shell would redirect every call to another repository or index, and the
+    /// pathspec and diff overrides would undo ``fixedEnvironment`` and the diff flags.
+    static let strippedVariables: Set<String> = [
+        "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_COMMON_DIR",
+        "GIT_NAMESPACE", "GIT_DIFF_OPTS", "GIT_EXTERNAL_DIFF", "GIT_CONFIG_PARAMETERS",
+        "GIT_GLOB_PATHSPECS", "GIT_NOGLOB_PATHSPECS", "GIT_ICASE_PATHSPECS",
+    ]
+
     /// Runs `git <args>` in `dir` and returns standard output.
     ///
     /// - Parameters:
     ///   - args: Arguments passed to `git`, e.g. `["status", "--porcelain=v1"]`.
     ///   - dir: Working directory the command runs in.
-    /// - Returns: The command's standard output decoded as UTF-8, or `nil` if the
-    ///   process failed to launch or exited with a non-zero status.
-    public static func run(_ args: [String], in dir: URL) -> String? {
-        run(args, in: dir, allowedStatuses: [])
+    ///   - timeout: Seconds before a still-running call is terminated; ``defaultTimeout`` unless
+    ///     the call mutates or talks to a network (``longTimeout``), nil to wait indefinitely.
+    /// - Returns: The command's standard output decoded as UTF-8 (lossily: one stray byte in a
+    ///   diff does not blank the whole result), or `nil` if the process failed to launch, timed
+    ///   out, or exited with a non-zero status.
+    public static func run(_ args: [String], in dir: URL, timeout: TimeInterval? = defaultTimeout) -> String? {
+        run(args, in: dir, allowedStatuses: [], timeout: timeout)
     }
 
-    /// Runs `git <args>` like ``run(_:in:)`` but also treats the exit statuses in
+    /// Runs `git <args>` like ``run(_:in:timeout:)`` but also treats the exit statuses in
     /// `allowedStatuses` as success.
     ///
     /// Some subcommands report a result with a non-zero exit — `git diff --no-index` exits 1
     /// when the inputs differ. Returns standard output, or `nil` outside the allowed statuses.
-    public static func run(_ args: [String], in dir: URL, allowedStatuses: Set<Int32>) -> String? {
-        run(args, in: dir, environment: [:], allowedStatuses: allowedStatuses)
+    public static func run(
+        _ args: [String], in dir: URL, allowedStatuses: Set<Int32>, timeout: TimeInterval? = defaultTimeout
+    ) -> String? {
+        run(args, in: dir, environment: [:], allowedStatuses: allowedStatuses, timeout: timeout)
     }
 
-    /// Runs `git <args>` like ``run(_:in:allowedStatuses:)`` with `environment` layered over the
-    /// inherited one (e.g. `GIT_INDEX_FILE` for a scratch index) — the single place `git` launches.
+    /// Runs `git <args>` like ``run(_:in:allowedStatuses:timeout:)`` with `environment` layered
+    /// over ``fixedEnvironment`` (e.g. `GIT_INDEX_FILE` for a scratch index — a caller's variable
+    /// wins), and `input` written to its stdin.
     ///
-    /// Goes through ``ProcessRunner``, which drains stdout and stderr concurrently: an undrained
-    /// stderr pipe deadlocks once git writes ~64 KB of warnings. stderr is then dropped; callers
-    /// want output or `nil`.
+    /// stderr is dropped; callers want output or `nil`. ``runCapturingError(_:in:environment:timeout:input:)``
+    /// keeps it.
     public static func run(
         _ args: [String], in dir: URL,
         environment: [String: String],
-        allowedStatuses: Set<Int32> = []
+        allowedStatuses: Set<Int32> = [],
+        timeout: TimeInterval? = defaultTimeout,
+        input: Data? = nil
     ) -> String? {
+        let result = runCapturingError(args, in: dir, environment: environment, timeout: timeout, input: input)
+        guard result.launched, !result.timedOut else { return nil }
+        guard result.status == 0 || allowedStatuses.contains(result.status) else { return nil }
+        return result.stdout
+    }
+
+    /// Runs `git <args>` and returns everything it produced — the single place `git` launches.
+    ///
+    /// For the calls whose failure the user must read in git's own words (a commit refused by a
+    /// hook). Goes through ``ProcessRunner``, which drains stdout and stderr concurrently: an
+    /// undrained stderr pipe deadlocks once git writes ~64 KB of warnings. The process runs under
+    /// ``fixedEnvironment`` with ``strippedVariables`` removed and `environment` layered last.
+    public static func runCapturingError(
+        _ args: [String], in dir: URL,
+        environment: [String: String] = [:],
+        timeout: TimeInterval? = defaultTimeout,
+        input: Data? = nil
+    ) -> GitRunResult {
         let result = ProcessRunner.run(
             executable, args,
             directory: dir,
-            environment: environment)
-        guard result.launched else { return nil }
-        guard result.status == 0 || allowedStatuses.contains(result.status) else { return nil }
-        return result.outputText
+            input: input,
+            environment: fixedEnvironment.merging(environment) { _, caller in caller },
+            removing: strippedVariables,
+            timeout: timeout)
+        return GitRunResult(
+            status: result.status,
+            stdout: String(decoding: result.stdout, as: UTF8.self),
+            stderr: String(decoding: result.stderr, as: UTF8.self),
+            timedOut: result.timedOut)
     }
 
     /// The repository root containing `dir`, or `nil` if `dir` is not inside a git repo.
@@ -119,10 +187,11 @@ public enum Git {
 
     /// The path of `file` relative to the repository `root`.
     ///
-    /// Falls back to the file's last path component when `file` is not located
-    /// under `root`. Mutating operations (stage/unstage/discard) never use the
-    /// fallback — they refuse to act on files outside `root` instead of guessing
-    /// a pathspec (see ``relativePathIfUnderRoot(_:root:)``).
+    /// Falls back to the file's last path component when `file` is not located under `root`.
+    /// No operation in this package uses the fallback: reads (``lineDiff(for:repoRoot:)``,
+    /// ``blame(for:line:repoRoot:)``) and mutations alike go through
+    /// ``relativePathIfUnderRoot(_:root:)`` and refuse a file outside `root` instead of guessing
+    /// a pathspec. Kept for callers that want a display name.
     public static func relativePath(_ file: URL, root: URL) -> String {
         relativePathIfUnderRoot(file, root: root) ?? file.lastPathComponent
     }

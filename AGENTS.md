@@ -8,11 +8,13 @@ A thin, synchronous Swift wrapper over the `git` command-line tool — repositor
 
 ## Module map
 
-- `Core/` — the engine: Git
-- `Enums/` — enums with no behaviour beyond their cases and labels: GitChangeKind
-- `Internal/` — non-public machinery: Git+Parsing
-- `Models/` — value types — the shape of a thing, nothing else: BlameInfo, GitStatusMap, GitWorktree, HunkHeader, WorktreeSummary
-- `Operations/` — the engine: operations: Git+Actions, Git+Blame, Git+Checkpoint, Git+Clone, Git+Diff, Git+Info, Git+Log, Git+MergeBase, Git+Status, Git+Worktree, GitHubCLI
+- `Core/` — the engine: Git (the one launch point: fixed environment, stripped variables, timeouts, lossy decode), SideBySideDiff
+- `Enums/` — enums with no behaviour beyond their cases and labels: GitChangeKind, GitOperation
+- `Errors/` — every Error type, one per file: GitCommitError
+- `Internal/` — non-public machinery: Git+Parsing, GitScratchIndex
+- `Models/` — value types — the shape of a thing, nothing else: BlameInfo, GitRunResult, GitStatusEntry, GitStatusMap, GitWorktree, HunkHeader, WorktreeSummary, SideBySideRow
+- `Support/` — pure helpers: GitDiffFlags, NameStatusParser, PorcelainStatusParser
+- `Operations/` — the engine: operations: Git+Actions, Git+Blame, Git+BlobHashes, Git+Checkpoint, Git+Clone, Git+Commit, Git+Diff, Git+InProgress, Git+Info, Git+Log, Git+MergeBase, Git+Status, Git+TextDiff, Git+WorkingTreeDiff, Git+Worktree, GitHubCLI
 
 ## Rules
 

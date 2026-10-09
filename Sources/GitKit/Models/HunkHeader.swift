@@ -50,13 +50,18 @@ public struct HunkHeader: Equatable, Sendable {
 
     /// The new-side line range this hunk marks, empty for a pure deletion.
     ///
-    /// A pure deletion has no new-side lines of its own; callers mark `max(1, newStart)` as
-    /// deleted instead. Clamped to 1 because git reports `newStart` as 0 when a hunk removes
-    /// the very first line of a file, and there is no line 0 to mark.
+    /// A pure deletion has no new-side lines of its own; callers mark ``deletionLine`` instead.
     public var newLineRange: Range<Int> {
         guard newCount > 0 else { return 0..<0 }
         return newStart..<(newStart + newCount)
     }
+
+    /// The line a pure deletion is pinned to: the first surviving line BELOW the removal,
+    /// `newStart + 1`. git reports `newStart` as the last line before the gap, `0` when the
+    /// removal was at the top of the file (so `+0,0` pins line 1), and the last line of the file
+    /// when it was at the end (so the pin is one past the end, which consumers must tolerate).
+    /// Ghost rows of the removed text render above this same line.
+    public var deletionLine: Int { newStart + 1 }
 
     /// Parses a `@@ … @@` header line (trailing newline optional), or nil when it is not one.
     ///

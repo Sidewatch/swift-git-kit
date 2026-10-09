@@ -79,6 +79,8 @@ final class GitKitTests: XCTestCase {
         XCTAssertEqual(Git.relativePath(file, root: root), "src/main.swift")
     }
 
+    /// `relativePath` keeps its basename fallback as a display-name convenience; no read or
+    /// mutating operation in the package uses it (see `GitOutOfRootTests`).
     func testRelativePathFallsBackForUnrelatedFile() throws {
         let root = try makeRepo()
         let outside = URL(fileURLWithPath: "/elsewhere/thing.txt")
@@ -331,23 +333,30 @@ final class GitKitTests: XCTestCase {
         XCTAssertTrue(Git.status(repoRoot: root).isEmpty)
     }
 
-    func testDiscardStagedAdditionRemovesFromIndexAndDisk() throws {
+    func testDiscardStagedAdditionRemovesFromIndexAndMovesTheFileToTheTrash() throws {
         // Regression: `checkout HEAD -- <path>` exits 1 for a staged-new file
         // (the pathspec doesn't exist in HEAD), so the confirmed discard was a
-        // silent no-op. Reverting to HEAD means the file goes away entirely.
+        // silent no-op. Reverting to HEAD means the file leaves the index and the tree — and,
+        // like an untracked discard, it goes to the Trash rather than being deleted for good:
+        // the agent wrote it minutes ago and "discard" must stay undoable.
         let root = try makeRepo()
         try write("seed\n", to: "seed.txt", in: root)
         _ = Git.stage(root.appendingPathComponent("seed.txt"), repoRoot: root)
         commit("seed", in: root)
 
-        let file = root.appendingPathComponent("new.txt")
-        try write("brand new\n", to: "new.txt", in: root)
+        let name = "gitcli-added-\(UUID().uuidString).txt"
+        let file = root.appendingPathComponent(name)
+        try write("brand new\n", to: name, in: root)
         _ = Git.stage(file, repoRoot: root)
-        XCTAssertEqual(Git.status(repoRoot: root).first { $0.path == "new.txt" }?.kind, .added)
+        XCTAssertEqual(Git.status(repoRoot: root).first { $0.path == name }?.kind, .added)
 
         XCTAssertTrue(Git.discard(file, kind: .added, repoRoot: root))
         XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
         XCTAssertTrue(Git.status(repoRoot: root).isEmpty)
+        let trash = try XCTUnwrap(FileManager.default.urls(for: .trashDirectory, in: .userDomainMask).first)
+        let landed = trash.appendingPathComponent(name)
+        defer { try? FileManager.default.removeItem(at: landed) }
+        XCTAssertEqual(try String(contentsOf: landed, encoding: .utf8), "brand new\n", "recoverable from \(trash.path)")
     }
 
     func testDiscardRenameRestoresOldNameAndRemovesNew() throws {
@@ -608,9 +617,15 @@ final class GitKitTests: XCTestCase {
         XCTAssertNotEqual(branch, "HEAD")  // the literal detached marker must never leak out
     }
 
-    func testCurrentBranchNilForUnbornHead() throws {
-        let root = try makeRepo()  // no commits yet — HEAD is unborn, rev-parse fails
-        XCTAssertNil(Git.currentBranch(repoRoot: root))
+    /// Before the first commit `rev-parse --abbrev-ref HEAD` fails, but the branch the first
+    /// commit will land on is known (`symbolic-ref`), and a status bar should show it rather
+    /// than nothing.
+    func testCurrentBranchOnUnbornHeadIsTheBranchName() throws {
+        let root = try makeRepo()  // no commits yet — HEAD is unborn
+        let expected = try XCTUnwrap(Git.run(["symbolic-ref", "--short", "HEAD"], in: root))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertFalse(expected.isEmpty)
+        XCTAssertEqual(Git.currentBranch(repoRoot: root), expected)
     }
 
     func testWorktreesListsMainAndLinkedWorktree() throws {

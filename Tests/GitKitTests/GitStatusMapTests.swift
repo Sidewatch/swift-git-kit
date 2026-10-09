@@ -74,17 +74,72 @@ final class GitStatusMapTests: XCTestCase {
         XCTAssertFalse(map.directoryContainsChanges(root.appendingPathComponent("z")))
     }
 
-    func testDeletedFilesExcluded() {
-        let map = GitStatusMap.build(status: [("gone.swift", .deleted)], repoRoot: root)
-        XCTAssertEqual(map, .empty)  // only deletion → empty
-        XCTAssertNil(map.kind(for: root.appendingPathComponent("gone.swift")))
+    /// A deleted file keeps its kind (a tab for a file that is gone says "D") and dots the
+    /// folder it was in — a folder whose only change is a deletion used to show nothing —
+    /// while the search scope leaves it out: there is no text to search.
+    func testDeletedFileKeptForLookupsAndDotsButNotListed() {
+        let map = GitStatusMap.build(status: [("src/gone.swift", .deleted)], repoRoot: root)
+        XCTAssertNotEqual(map, .empty)
+        XCTAssertEqual(map.kind(for: root.appendingPathComponent("src/gone.swift")), .deleted)
+        XCTAssertTrue(map.directoryContainsChanges(root.appendingPathComponent("src")))
+        XCTAssertTrue(map.directoryContainsChanges(root))
+        XCTAssertEqual(map.changedFilePaths, [])
     }
 
-    func testDeletedMixedWithLiveKeepsLiveOnly() {
+    func testDeletedMixedWithLiveListsLiveOnly() {
         let map = GitStatusMap.build(
             status: [("keep.swift", .modified), ("gone.swift", .deleted)], repoRoot: root)
         XCTAssertEqual(map.kind(for: root.appendingPathComponent("keep.swift")), .modified)
-        XCTAssertNil(map.kind(for: root.appendingPathComponent("gone.swift")))
+        XCTAssertEqual(map.kind(for: root.appendingPathComponent("gone.swift")), .deleted)
+        XCTAssertEqual(map.changedFilePaths, [root.appendingPathComponent("keep.swift").path])
+    }
+
+    /// `mv Foo.ts foo.ts` on the default case-insensitive volume: git keeps reporting `Foo.ts`
+    /// while the tree lists `foo.ts`. The exact lookup misses; the folded one hits.
+    func testCaseOnlyRenameStillFindsTheEntry() {
+        let map = GitStatusMap.build(status: [("src/Foo.ts", .modified)], repoRoot: root)
+        XCTAssertEqual(map.kind(for: root.appendingPathComponent("src/foo.ts")), .modified)
+        XCTAssertEqual(map.kind(for: root.appendingPathComponent("SRC/FOO.TS")), .modified)
+        XCTAssertNil(map.kind(for: root.appendingPathComponent("src/bar.ts")))
+    }
+
+    /// A project opened through a symlink: git resolves the root to the real path, rows carry
+    /// the symlink path. The opened folder passed as an alias keys every entry under it too.
+    func testOpenedFolderAliasKeysEntriesAndDots() {
+        let opened = URL(fileURLWithPath: "/Users/someone/link")
+        let map = GitStatusMap.build(status: [("src/a.swift", .modified)], repoRoot: root, aliases: [opened])
+        XCTAssertEqual(map.kind(for: opened.appendingPathComponent("src/a.swift")), .modified)
+        XCTAssertTrue(map.directoryContainsChanges(opened.appendingPathComponent("src")))
+        XCTAssertTrue(map.directoryContainsChanges(opened))
+        XCTAssertEqual(map.kind(for: root.appendingPathComponent("src/a.swift")), .modified)
+        XCTAssertEqual(map.changedFilePaths.count, 1, "one list entry per file, not per alias")
+    }
+
+    /// `merge(propagatingTo:aliases:)` dots the ancestors up to each alias of the opened folder.
+    func testMergePropagatesToEveryTopAlias() {
+        let nested = root.appendingPathComponent("plugins/one")
+        let map = GitStatusMap.build(status: [("lib/x.swift", .modified)], repoRoot: nested)
+        let alias = URL(fileURLWithPath: "/elsewhere")
+        let aliasNested = GitStatusMap.build(status: [("lib/y.swift", .added)], repoRoot: alias.appendingPathComponent("plugins/two"))
+        let merged = GitStatusMap.merge([map, aliasNested], propagatingTo: root, aliases: [alias])
+        XCTAssertTrue(merged.directoryContainsChanges(root.appendingPathComponent("plugins")))
+        XCTAssertTrue(merged.directoryContainsChanges(root))
+        XCTAssertTrue(merged.directoryContainsChanges(alias.appendingPathComponent("plugins")))
+        XCTAssertTrue(merged.directoryContainsChanges(alias))
+    }
+
+    /// A submodule pointer bump is ` M sub` with no slash, yet `sub` is a directory on disk:
+    /// the folder gets a dot and nothing is listed as a file.
+    func testSubmoduleEntryIsADirectoryNotAFile() throws {
+        let real = FileManager.default.temporaryDirectory
+            .appendingPathComponent("gitmap-submodule-\(ProcessInfo.processInfo.processIdentifier)")
+        try FileManager.default.createDirectory(at: real.appendingPathComponent("vendor/sub"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: real) }
+        let map = GitStatusMap.build(status: [("vendor/sub", .modified)], repoRoot: real)
+        XCTAssertNil(map.kind(for: real.appendingPathComponent("vendor/sub")))
+        XCTAssertTrue(map.directoryContainsChanges(real.appendingPathComponent("vendor/sub")))
+        XCTAssertTrue(map.directoryContainsChanges(real.appendingPathComponent("vendor")))
+        XCTAssertEqual(map.changedFilePaths, [])
     }
 
     func testUntrackedDirectoryEntryMarksFolderNotFile() {

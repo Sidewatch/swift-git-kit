@@ -14,13 +14,14 @@ import FoundationExtensions
 /// Branch identity and worktree enumeration.
 public extension Git {
 
-    /// The short name of the branch checked out at `root`, the short SHA on a detached `HEAD`,
-    /// or `nil` when git fails (e.g. an unborn `HEAD` in a repository with no commits).
+    /// The short name of the branch checked out at `root` — on an unborn `HEAD` (a repository
+    /// with no commits yet) the branch the first commit will land on — the short SHA on a
+    /// detached `HEAD`, or `nil` when `root` is not a repository.
     static func currentBranch(repoRoot root: URL) -> String? {
         guard
             let name = run(["rev-parse", "--abbrev-ref", "HEAD"], in: root)?
                 .trimmed, !name.isEmpty
-        else { return nil }
+        else { return unbornBranch(repoRoot: root) }
         guard name == "HEAD" else { return name }
         // Detached HEAD — identify the checkout by its short commit SHA instead.
         guard
@@ -30,22 +31,31 @@ public extension Git {
         return sha
     }
 
+    /// The branch `HEAD` points at before it has a commit (`rev-parse` fails there, `symbolic-ref` does not).
+    private static func unbornBranch(repoRoot root: URL) -> String? {
+        guard let name = run(["symbolic-ref", "--short", "HEAD"], in: root)?.trimmed, !name.isEmpty else { return nil }
+        return name
+    }
+
     /// All worktrees of the repository containing `root` (any worktree, main or linked), main
     /// first; `[]` on failure.
     ///
     /// Parses `git worktree list --porcelain`. Branches lose their `refs/heads/` prefix; detached
     /// and bare entries have a `nil` branch. git lists the main worktree first (``GitWorktree/isMain``).
+    /// A `prunable` entry — a worktree whose directory is gone — is not a worktree and is skipped.
     static func worktrees(repoRoot root: URL) -> [GitWorktree] {
         guard let out = run(["worktree", "list", "--porcelain"], in: root) else { return [] }
         var result: [GitWorktree] = []
         var path: URL?
         var branch: String?
+        var prunable = false
         func flush() {
-            if let path {
+            if let path, !prunable {
                 result.append(GitWorktree(path: path, branch: branch, isMain: result.isEmpty))
             }
             path = nil
             branch = nil
+            prunable = false
         }
         for line in out.split(separator: "\n", omittingEmptySubsequences: false) {
             if line.isEmpty {  // blank line terminates an entry
@@ -60,8 +70,10 @@ public extension Git {
                     ref.hasPrefix("refs/heads/")
                     ? String(ref.dropFirst("refs/heads/".count))
                     : ref
+            } else if line.hasPrefix("prunable") {
+                prunable = true
             }
-            // "HEAD", "detached", "bare", "locked", "prunable" need no handling:
+            // "HEAD", "detached", "bare", "locked" need no handling:
             // detached/bare entries simply never receive a `branch` line.
         }
         flush()  // porcelain output may or may not end with a trailing blank line
@@ -91,6 +103,6 @@ public extension Git {
         var args = ["worktree", "remove"]
         if force { args.append("--force"); args.append("--force") }  // -f -f overrides a lock too
         args.append(worktree.path)
-        return run(args, in: root) != nil
+        return run(args, in: root, timeout: longTimeout) != nil
     }
 }

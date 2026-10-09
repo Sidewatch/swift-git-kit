@@ -17,16 +17,15 @@ public extension Git {
 
     // `currentBranch(repoRoot:)` lives in Git+Worktree.
 
-    /// Local branches, each flagged if it's the checked-out one. `%(HEAD)` is a single
-    /// leading char — `*` for the current branch, a space otherwise. (ref-filter format
-    /// has no `%x1f` escape, unlike log's pretty-format, so the prefix char is the marker.)
+    /// Local branches (`refs/heads`), each flagged if it's the checked-out one. None is current on
+    /// a detached `HEAD` or mid-rebase — `git branch` would list a `(no branch, rebasing x)`
+    /// pseudo-entry there, which is not a branch.
     static func localBranches(repoRoot root: URL) -> [(name: String, isCurrent: Bool)] {
-        guard let out = run(["branch", "--format=%(HEAD)%(refname:short)"], in: root) else { return [] }
-        return out.split(separator: "\n", omittingEmptySubsequences: true).compactMap { line in
-            let s = String(line)
-            guard let marker = s.first else { return nil }
-            let name = String(s.dropFirst()).trimmingCharacters(in: .whitespaces)
-            return name.isEmpty ? nil : (name, marker == "*")
+        guard let out = run(["for-each-ref", "--format=%(refname:short)", "refs/heads"], in: root) else { return [] }
+        let current = run(["symbolic-ref", "-q", "--short", "HEAD"], in: root)?.trimmed
+        return out.split(separator: "\n", omittingEmptySubsequences: true).map { line in
+            let name = String(line)
+            return (name, name == current)
         }
     }
 
@@ -57,12 +56,12 @@ public extension Git {
     /// Fetches refs from `remote` (default `origin`). Network-bound — call off the main thread.
     @discardableResult
     static func fetch(repoRoot root: URL, remote: String = "origin") -> Bool {
-        run(["fetch", remote], in: root) != nil
+        run(["fetch", remote], in: root, timeout: longTimeout) != nil
     }
 
     /// Switches the working tree to `branch`. Returns whether it succeeded.
     @discardableResult
     static func checkout(_ branch: String, repoRoot root: URL) -> Bool {
-        run(["checkout", branch], in: root) != nil
+        run(["checkout", branch], in: root, timeout: longTimeout) != nil
     }
 }

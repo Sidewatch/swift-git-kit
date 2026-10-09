@@ -30,6 +30,8 @@ public struct WorktreeSummary: Sendable, Equatable {
     public let untracked: Int
     /// Files renamed.
     public let renamed: Int
+    /// Files with an unresolved conflict.
+    public let conflicted: Int
 
     /// Line insertions in the working tree vs HEAD (from ``Git/diffStat(repoRoot:)``;
     /// 0 when not gathered). Untracked files don't contribute.
@@ -38,7 +40,7 @@ public struct WorktreeSummary: Sendable, Equatable {
     public let deletions: Int
 
     /// Total changed entries across all kinds.
-    public var changeCount: Int { added + modified + deleted + untracked + renamed }
+    public var changeCount: Int { added + modified + deleted + untracked + renamed + conflicted }
 
     /// Whether the worktree has any uncommitted change worth reviewing.
     public var isDirty: Bool { changeCount > 0 }
@@ -46,7 +48,7 @@ public struct WorktreeSummary: Sendable, Equatable {
     /// Creates a summary from counts already tallied; ``make(worktree:status:insertions:deletions:)`` tallies them.
     public init(
         worktree: GitWorktree, added: Int = 0, modified: Int = 0,
-        deleted: Int = 0, untracked: Int = 0, renamed: Int = 0,
+        deleted: Int = 0, untracked: Int = 0, renamed: Int = 0, conflicted: Int = 0,
         insertions: Int = 0, deletions: Int = 0
     ) {
         self.worktree = worktree
@@ -55,6 +57,7 @@ public struct WorktreeSummary: Sendable, Equatable {
         self.deleted = deleted
         self.untracked = untracked
         self.renamed = renamed
+        self.conflicted = conflicted
         self.insertions = insertions
         self.deletions = deletions
     }
@@ -67,7 +70,7 @@ public struct WorktreeSummary: Sendable, Equatable {
         status: [(path: String, kind: GitChangeKind)],
         insertions: Int = 0, deletions: Int = 0
     ) -> WorktreeSummary {
-        var a = 0, m = 0, d = 0, u = 0, r = 0
+        var a = 0, m = 0, d = 0, u = 0, r = 0, c = 0
         for entry in status {
             switch entry.kind {
             case .added: a += 1
@@ -75,11 +78,12 @@ public struct WorktreeSummary: Sendable, Equatable {
             case .deleted: d += 1
             case .untracked: u += 1
             case .renamed: r += 1
+            case .conflicted: c += 1
             }
         }
         return WorktreeSummary(
             worktree: worktree, added: a, modified: m,
-            deleted: d, untracked: u, renamed: r,
+            deleted: d, untracked: u, renamed: r, conflicted: c,
             insertions: insertions, deletions: deletions)
     }
 }

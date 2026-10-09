@@ -10,7 +10,6 @@
 
 import Foundation
 import FoundationExtensions
-import ProcessRunner
 
 /// Cloning a remote repository.
 public extension Git {
@@ -27,7 +26,7 @@ public extension Git {
 
     /// Clones `url` into `parent` (under `name`, or git's default directory name).
     ///
-    /// Blocking and network-bound — call OFF the main thread. Unlike ``run(_:in:)`` this
+    /// Blocking and network-bound — call OFF the main thread. Unlike ``run(_:in:timeout:)`` this
     /// captures git's stderr so a failure (bad URL, auth, network) surfaces a real message.
     ///
     /// - Returns: `.path` = the cloned directory on success; `.error` = git's stderr otherwise.
@@ -36,7 +35,7 @@ public extension Git {
         let trimmedName = name?.trimmed
         if let trimmedName, !trimmedName.isEmpty { args.append(trimmedName) }
 
-        let result = ProcessRunner.run(executable, args, directory: parent, augmentPATH: false)
+        let result = runCapturingError(args, in: parent, timeout: longTimeout)
         guard result.launched else {
             return CloneResult(
                 path: nil,
@@ -45,7 +44,7 @@ public extension Git {
                     comment: "Clone Failed alert: the git program could not be started"))
         }
         guard result.succeeded else {
-            let text = result.errorText.trimmed
+            let text = result.stderr.trimmed
             return CloneResult(
                 path: nil,
                 error: text.isEmpty

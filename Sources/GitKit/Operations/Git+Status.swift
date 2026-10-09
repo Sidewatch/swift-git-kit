@@ -13,37 +13,20 @@ import Foundation
 /// Working-tree status.
 public extension Git {
 
-    /// Working-tree changes versus `HEAD` as repository-relative `(path, kind)` pairs.
+    /// Working-tree changes versus `HEAD`, one entry per changed path, in git's order.
     ///
     /// `-z` keeps paths verbatim (no C-style quoting); `-uall` lists each untracked file rather
-    /// than collapsing a new directory to `dir/`. A rename or copy reports its new path.
-    static func status(repoRoot root: URL) -> [(path: String, kind: GitChangeKind)] {
+    /// than collapsing a new directory to `dir/`. A rename or copy reports its new path with
+    /// ``GitStatusEntry/oldPath`` set. The kind follows the `XY` code (see
+    /// ``GitChangeKind/conflicted`` for the conflict codes): a file deleted from the working tree
+    /// is ``GitChangeKind/deleted`` whatever was staged for it (`AD`, `MD`, `RD`).
+    static func statusEntries(repoRoot root: URL) -> [GitStatusEntry] {
         guard let out = run(["status", "--porcelain=v1", "-z", "-uall"], in: root) else { return [] }
-        var result: [(String, GitChangeKind)] = []
-        let fields = out.split(separator: "\0", omittingEmptySubsequences: true)
-        var i = 0
-        while i < fields.count {
-            let entry = String(fields[i])
-            i += 1
-            guard entry.count >= 4 else { continue }
-            let code = String(entry.prefix(2))
-            let path = String(entry.dropFirst(3))
-            // Rename/copy entries carry the OLD path as the next NUL field — skip it.
-            if code.contains("R") || code.contains("C") { i += 1 }
-            let kind: GitChangeKind
-            if code.contains("?") {
-                kind = .untracked
-            } else if code.contains("A") {
-                kind = .added
-            } else if code.contains("D") {
-                kind = .deleted
-            } else if code.contains("R") {
-                kind = .renamed
-            } else {
-                kind = .modified
-            }
-            result.append((path, kind))
-        }
-        return result
+        return PorcelainStatusParser.entries(out)
+    }
+
+    /// ``statusEntries(repoRoot:)`` as repository-relative `(path, kind)` pairs.
+    static func status(repoRoot root: URL) -> [(path: String, kind: GitChangeKind)] {
+        statusEntries(repoRoot: root).map { (path: $0.path, kind: $0.kind) }
     }
 }

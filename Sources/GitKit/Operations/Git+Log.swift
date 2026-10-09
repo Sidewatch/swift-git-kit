@@ -35,12 +35,13 @@ public extension Git {
 
     /// Up to `limit` of the most recent commits on the current branch, newest first.
     ///
-    /// Fields are `%x1f`-delimited so a subject with any punctuation parses cleanly.
+    /// Fields are `%x1f`-delimited so a subject with any punctuation parses cleanly;
+    /// `--no-show-signature` keeps a `log.showSignature` user's gpg lines out of the records.
     static func log(repoRoot root: URL, limit: Int = 300) -> [GitCommit] {
         guard
             let out = run(
                 [
-                    "log", "-n", "\(max(1, limit))", "--date=short",
+                    "log", "-n", "\(max(1, limit))", "--date=short", "--no-show-signature",
                     "--pretty=format:\(Self.commitFormat)",
                 ], in: root)
         else { return [] }
@@ -53,7 +54,7 @@ public extension Git {
         guard
             let out = run(
                 [
-                    "log", "-n", "\(max(1, limit))", "--date=short", "--follow",
+                    "log", "-n", "\(max(1, limit))", "--date=short", "--follow", "--no-show-signature",
                     "--pretty=format:\(Self.commitFormat)", "--", path,
                 ], in: root)
         else { return [] }
@@ -62,7 +63,7 @@ public extension Git {
 
     /// The full patch for one commit (`git show`), for the History detail view. `nil` on error.
     static func showCommit(_ hash: String, repoRoot root: URL) -> String? {
-        run(["show", "--no-color", "--stat", "--patch", hash], in: root)
+        run(["show", "--no-show-signature", "--stat", "--patch"] + GitDiffFlags.patch + [hash], in: root)
     }
 
     /// A file's content at `revision` (`git show <rev>:<path>`), for viewing a past version

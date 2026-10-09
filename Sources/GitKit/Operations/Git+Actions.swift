@@ -19,7 +19,7 @@ public extension Git {
     @discardableResult
     static func stage(_ file: URL, repoRoot root: URL) -> Bool {
         guard let rel = relativePathIfUnderRoot(file, root: root) else { return false }
-        return run(["add", "--", rel], in: root) != nil
+        return run(["add", "--", rel], in: root, timeout: longTimeout) != nil
     }
 
     /// Unstages `file` (`git restore --staged`). Returns `true` on success.
@@ -30,28 +30,31 @@ public extension Git {
     @discardableResult
     static func unstage(_ file: URL, repoRoot root: URL) -> Bool {
         guard let rel = relativePathIfUnderRoot(file, root: root) else { return false }
-        return run(["restore", "--staged", "--", rel], in: root) != nil
+        return run(["restore", "--staged", "--", rel], in: root, timeout: longTimeout) != nil
     }
 
-    /// Reverts `file` to `HEAD` by `kind`; `true` on success. **Destructive.**
+    /// Reverts `file` to `HEAD` by `kind`; `true` on success. **Destructive, but undoable.**
     ///
-    /// `.untracked` goes to the Trash (``trashUntracked(_:)``), `.added` leaves the index and
-    /// disk, `.renamed` returns under its old name, anything else is restored from `HEAD`. Every
-    /// kind — untracked included — is refused when `file` is not under `root`, so nothing outside
-    /// the repository or a same-named file elsewhere is ever touched.
+    /// `.untracked` and `.added` go to the Trash (``trashUntracked(_:)``; `.added` also leaves
+    /// the index), `.renamed` returns under its old name, anything else is restored from `HEAD`.
+    /// Refused (`false`): a file not under `root`, so nothing outside the repository or a
+    /// same-named file elsewhere is ever touched; a `.conflicted` file, which has no single
+    /// `HEAD` version to return to; and a gitlink (``isGitlink(_:repoRoot:)``), which `restore`
+    /// cannot revert and which stands for a whole checkout.
     @discardableResult
     static func discard(_ file: URL, kind: GitChangeKind, repoRoot root: URL) -> Bool {
         guard let rel = relativePathIfUnderRoot(file, root: root) else { return false }
         if kind == .untracked { return trashUntracked(file) != nil }
-        // `checkout HEAD -- <path>` requires the pathspec to exist in HEAD, which a
-        // staged-new file and a rename's NEW path (the path status reports) never
-        // do — git exits 1 with "pathspec did not match". `restore --source=HEAD
-        // --staged --worktree` reverts every kind uniformly: paths in HEAD are
-        // restored, paths absent from HEAD are removed from the index and disk.
+        guard kind != .conflicted, !isGitlink(rel, repoRoot: root) else { return false }
+        if kind == .added { return discardAddition(file, rel: rel, repoRoot: root) }
+        // `checkout HEAD -- <path>` requires the pathspec to exist in HEAD, which a rename's NEW
+        // path (the path status reports) never does — git exits 1 with "pathspec did not match".
+        // `restore --source=HEAD --staged --worktree` reverts every kind uniformly: paths in
+        // HEAD are restored, paths absent from HEAD are removed from the index and disk.
         // A rename needs BOTH paths so the old file comes back too.
         var paths = [rel]
         if kind == .renamed, let old = renameSource(of: rel, repoRoot: root) { paths.insert(old, at: 0) }
-        return run(["restore", "--source=HEAD", "--staged", "--worktree", "--"] + paths, in: root) != nil
+        return run(["restore", "--source=HEAD", "--staged", "--worktree", "--"] + paths, in: root, timeout: longTimeout) != nil
     }
 
     /// Moves an untracked FILE to the Trash and returns where it landed; nil when it was not a
@@ -69,25 +72,30 @@ public extension Git {
         return trashed as URL?
     }
 
-    /// The pre-rename (old) path of the staged rename/copy whose new path is
-    /// `rel`, from `git status --porcelain=v1 -z` (the old path is the entry's
-    /// extra NUL-terminated field, which ``status(repoRoot:)`` skips).
+    /// Whether `file` is recorded in the index as a gitlink (mode `160000`): a submodule or an
+    /// embedded repository, which status lists as one entry and no file-level action can revert.
+    static func isGitlink(_ file: URL, repoRoot root: URL) -> Bool {
+        guard let rel = relativePathIfUnderRoot(file, root: root) else { return false }
+        return isGitlink(rel, repoRoot: root)
+    }
+}
+
+extension Git {
+
+    /// ``isGitlink(_:repoRoot:)`` for a repository-relative path.
+    static func isGitlink(_ rel: String, repoRoot root: URL) -> Bool {
+        run(["ls-files", "-s", "--", rel], in: root)?.hasPrefix("160000 ") ?? false
+    }
+
+    /// Discards a staged addition: the file goes to the Trash (recoverable, as an untracked
+    /// discard is) and its entry leaves the index.
+    private static func discardAddition(_ file: URL, rel: String, repoRoot root: URL) -> Bool {
+        guard trashUntracked(file) != nil else { return false }
+        return run(["rm", "--cached", "-q", "--", rel], in: root, timeout: longTimeout) != nil
+    }
+
+    /// The pre-rename (old) path of the staged rename/copy whose new path is `rel`.
     private static func renameSource(of rel: String, repoRoot root: URL) -> String? {
-        guard let out = run(["status", "--porcelain=v1", "-z"], in: root) else { return nil }
-        let fields = out.split(separator: "\0", omittingEmptySubsequences: true)
-        var i = 0
-        while i < fields.count {
-            let entry = String(fields[i])
-            i += 1
-            guard entry.count >= 4 else { continue }
-            let code = entry.prefix(2)
-            guard code.contains("R") || code.contains("C") else { continue }
-            let newPath = String(entry.dropFirst(3))
-            guard i < fields.count else { return nil }
-            let old = String(fields[i])
-            i += 1
-            if newPath == rel { return old }
-        }
-        return nil
+        statusEntries(repoRoot: root).first { $0.path == rel }?.oldPath
     }
 }

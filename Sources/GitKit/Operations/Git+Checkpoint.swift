@@ -25,27 +25,26 @@ public extension Git {
     /// Captures the whole working tree (honouring `.gitignore`) as a dangling commit parented on
     /// `HEAD`, **without touching the working tree, the index, or the stash list**; nil on failure.
     ///
-    /// Built through a scratch `GIT_INDEX_FILE` that must live outside the repo, or `git add -A`
-    /// commits the index's own `.lock`. The commit is unreferenced — pass it to
-    /// ``anchorCheckpoint(_:id:repoRoot:)`` before `git gc` prunes it.
+    /// Built through a scratch index (``GitScratchIndex``) seeded with a copy of the real one,
+    /// so `git add -A` re-hashes only the files whose stat data changed and keeps a
+    /// tracked-but-ignored file (one committed before its path was ignored — `.vscode/settings.json`,
+    /// a checked-in `dist/`), which `add` into an empty index would skip, leaving it a phantom
+    /// deletion in every checkpoint. A conflicted index copies fine: `add -A` resolves each entry
+    /// to the working tree. A repository with no index yet starts empty, which is right.
+    /// The commit is unreferenced — pass it to ``anchorCheckpoint(_:id:repoRoot:)`` before
+    /// `git gc` prunes it.
     static func createCheckpoint(repoRoot: URL) -> String? {
-        let indexPath = FileManager.default.temporaryDirectory
-            .appendingPathComponent("sidewatch-checkpoint-index-\(UUID().uuidString)").path
-        defer {
-            try? FileManager.default.removeItem(atPath: indexPath)
-            try? FileManager.default.removeItem(atPath: indexPath + ".lock")
-        }
-        let env = ["GIT_INDEX_FILE": indexPath]
+        let scratch = GitScratchIndex()
+        defer { scratch.remove() }
+        if !scratch.copyIndex(of: repoRoot) { scratch.read(tree: "HEAD", in: repoRoot) }
 
-        // Seed from HEAD first. `git add -A` into an EMPTY index skips a tracked-but-ignored
-        // file (one committed before its path was added to .gitignore — .vscode/settings.json,
-        // a checked-in dist/), because add only re-adds an ignored path already in the index.
-        // Without this the file is missing from every checkpoint tree, so it shows as a phantom
-        // deletion against any real commit and a turn's edits to it are invisible.
-        // A repo with no commits has no HEAD; there is nothing to seed from, which is correct.
-        _ = run(["read-tree", "HEAD"], in: repoRoot, environment: env)
-        guard run(["add", "-A"], in: repoRoot, environment: env) != nil,
-            let tree = trimmed(run(["write-tree"], in: repoRoot, environment: env))
+        // `--ignore-errors` (exit 1) carries on past a file git cannot read or a nested
+        // repository with no commit; the tree is written without them instead of not at all.
+        guard
+            run(
+                ["add", "-A", "--ignore-errors"], in: repoRoot, environment: scratch.environment,
+                allowedStatuses: [1], timeout: longTimeout) != nil,
+            let tree = trimmed(run(["write-tree"], in: repoRoot, environment: scratch.environment, timeout: longTimeout))
         else { return nil }
 
         // An identity is required to write a commit object, and the repo may not configure one
@@ -57,7 +56,7 @@ public extension Git {
         // Parent on HEAD when there is one — a repository with no commits yet has none, and
         // passing `-p` with an empty value fails outright.
         if let head = trimmed(run(["rev-parse", "HEAD"], in: repoRoot)) { args += ["-p", head] }
-        return trimmed(run(args, in: repoRoot))
+        return trimmed(run(args, in: repoRoot, timeout: longTimeout))
     }
 
     /// Anchors `commit` at ``checkpointRefPrefix`` + `id` so git's own `gc` cannot prune it;
@@ -100,82 +99,37 @@ public extension Git {
     /// The unified diff from checkpoint `from` to `to`, or to the **live working tree** when `to`
     /// is nil (a turn still in progress), optionally narrowed to one repo-relative `path`.
     /// Empty when nothing changed, nil on failure.
+    ///
+    /// The working-tree comparison is ``workingTreeDiff(repoRoot:from:paths:nameStatus:)``: one
+    /// process through a scratch index, untracked files included, and the real index never
+    /// written — nothing is hashed into a throwaway commit on every refresh.
     static func checkpointDiff(from: String, to: String?, path: String? = nil, repoRoot: URL) -> String? {
-        // Working-tree comparison: diff directly and splice in untracked files. Must not
-        // snapshot: that re-hashes the whole tree and writes objects on every refresh.
-        guard let target = to else {
-            var args = ["-c", "core.quotePath=false", "diff", "--no-color", from]
-            if let path { args += ["--", path] }  // narrowed like the two-commit branch below
-            var diff = run(args, in: repoRoot) ?? ""
-            let untracked =
-                run(
-                    [
-                        "-c", "core.quotePath=false", "ls-files", "--others",
-                        "--exclude-standard", "-z",
-                    ], in: repoRoot) ?? ""
-            for file in untracked.split(separator: "\0").map(String.init) {
-                if let path, file != path { continue }
-                diff += untrackedDiff(for: repoRoot.appendingPathComponent(file), repoRoot: repoRoot)
-            }
-            return diff
-        }
-        var args = ["-c", "core.quotePath=false", "diff", from, target]
-        if let path { args += ["--", path] }
-        return run(args, in: repoRoot)
+        let paths = path.map { [$0] } ?? []
+        guard let target = to else { return workingTreeDiff(repoRoot: repoRoot, from: from, paths: paths) }
+        return run(
+            GitDiffFlags.quotePathOff + ["diff"] + GitDiffFlags.patch + [from, target] + (paths.isEmpty ? [] : ["--"] + paths),
+            in: repoRoot)
     }
 
     /// The repo-relative files changed from checkpoint `from` to `to` (or the live working tree
     /// when nil), with their kind, in git's order — what a turn actually touched, not what the
-    /// transcript says it touched.
+    /// transcript says it touched. A rename is reported under its new path.
+    ///
+    /// The working-tree comparison is ``workingTreeChangedFiles(repoRoot:from:paths:)``: a file
+    /// the checkpoint captured while untracked, unchanged since, is not reported, where a diff
+    /// against the real index read it as `D` and then re-added it as untracked.
     static func checkpointChangedFiles(
         from: String, to: String?,
         repoRoot: URL
     ) -> [(path: String, kind: GitChangeKind)] {
-        // Same reasoning as `checkpointDiff`: compare against the working tree directly and add
-        // untracked files, instead of hashing the whole tree into a throwaway commit.
-        guard let target = to else {
-            var files = changedFiles(
-                rawNameStatus: run(
-                    [
-                        "-c", "core.quotePath=false", "diff",
-                        "--name-status", from,
-                    ], in: repoRoot))
-            let untracked =
-                run(
-                    [
-                        "-c", "core.quotePath=false", "ls-files", "--others",
-                        "--exclude-standard", "-z",
-                    ], in: repoRoot) ?? ""
-            files += untracked.split(separator: "\0").map { (path: String($0), kind: GitChangeKind.added) }
-            return files
+        let entries: [GitStatusEntry]
+        if let target = to {
+            let out = run(GitDiffFlags.quotePathOff + ["diff", "--name-status", "-z", from, target], in: repoRoot)
+            entries = NameStatusParser.entries(out ?? "")
+        } else {
+            entries = workingTreeChangedFiles(repoRoot: repoRoot, from: from)
         }
-        // core.quotePath=false: without it a path with non-ASCII characters comes back C-quoted
-        // ("\303\251"), which no caller can open.
-        return changedFiles(
-            rawNameStatus: run(
-                [
-                    "-c", "core.quotePath=false", "diff",
-                    "--name-status", from, target,
-                ], in: repoRoot))
-    }
-
-    /// Parses `git diff --name-status` output.
-    private static func changedFiles(rawNameStatus: String?) -> [(path: String, kind: GitChangeKind)] {
-        guard let out = rawNameStatus else { return [] }
-        return out.split(separator: "\n").compactMap { line in
-            let parts = line.components(separatedBy: "\t")
-            guard parts.count >= 2, let status = parts[0].first else { return nil }
-            // A rename reports `R<score>\told\tnew` — the new path is what a reviewer opens.
-            let path = parts.count >= 3 ? parts[2] : parts[1]
-            let kind: GitChangeKind
-            switch status {
-            case "A": kind = .added
-            case "D": kind = .deleted
-            case "R": kind = .renamed
-            default: kind = .modified
-            }
-            return (path, kind)
-        }
+        return entries.map { (path: $0.path, kind: $0.kind) }
     }
 
     /// Drops the oldest anchors, keeping the `keeping` (at least 0) newest by commit time, and
@@ -198,6 +152,9 @@ public extension Git {
         }
         return dropped
     }
+}
+
+extension Git {
 
     /// `out` stripped of surrounding whitespace, or `nil` when it is absent or empty.
     private static func trimmed(_ out: String?) -> String? {

@@ -23,8 +23,9 @@ public enum GitChangeKind: Sendable, Equatable {
     /// A tracked file or line whose contents differ from `HEAD`.
     case modified
 
-    /// A tracked file removed from the working tree, or — at line granularity —
-    /// the surviving line directly below a pure deletion.
+    /// A tracked file removed from the working tree, or — at line granularity — the line directly
+    /// below a pure deletion (`1` for a deletion before the first line; one past the last line for
+    /// a deletion at the end of the file, which a consumer must tolerate).
     case deleted
 
     /// A file not yet tracked by git.
@@ -33,8 +34,12 @@ public enum GitChangeKind: Sendable, Equatable {
     /// A tracked file that git detected as renamed.
     case renamed
 
+    /// A file with an unresolved merge, rebase or cherry-pick conflict (`UU`, `AA`, `DD`, `AU`,
+    /// `UA`, `DU`, `UD` in porcelain status). Never reported at line granularity.
+    case conflicted
+
     /// The single-letter status badge git uses in short/porcelain output
-    /// (`A`/`M`/`D`/`R`/`U`) — for a Changes-panel or gutter badge.
+    /// (`A`/`M`/`D`/`R`/`U`), plus `C` for a conflict — for a Changes-panel or gutter badge.
     public var letter: String {
         switch self {
         case .added: return "A"
@@ -42,6 +47,7 @@ public enum GitChangeKind: Sendable, Equatable {
         case .deleted: return "D"
         case .renamed: return "R"
         case .untracked: return "U"
+        case .conflicted: return "C"
         }
     }
 }

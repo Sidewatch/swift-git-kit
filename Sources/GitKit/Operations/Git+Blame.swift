@@ -14,11 +14,28 @@ import Foundation
 public extension Git {
 
     /// Blame for one 1-based working-tree line (fast: `blame -L n,n`), or `nil` when `line` is
-    /// out of range or blame fails. Uncommitted lines report author `"Not Committed Yet"`.
+    /// out of range, `file` is outside `root` (without running git), or blame fails.
+    /// Uncommitted lines report author `"Not Committed Yet"`.
+    ///
+    /// A failure is retried once with the user's global and system configuration ignored: a
+    /// global `blame.ignoreRevsFile` naming a file this repository lacks makes every blame exit 128.
     static func blame(for file: URL, line: Int, repoRoot root: URL) -> BlameInfo? {
-        guard line > 0 else { return nil }
-        let rel = relativePath(file, root: root)
-        guard let out = run(["blame", "-L", "\(line),\(line)", "--line-porcelain", "--", rel], in: root) else { return nil }
+        guard line > 0, let rel = relativePathIfUnderRoot(file, root: root) else { return nil }
+        let args = ["blame", "-L", "\(line),\(line)", "--line-porcelain", "--", rel]
+        guard let out = run(args, in: root) ?? run(args, in: root, environment: cleanConfigEnvironment) else {
+            return nil
+        }
+        return parseBlame(out)
+    }
+}
+
+extension Git {
+
+    /// `GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1`: only the repository's own configuration.
+    static let cleanConfigEnvironment = ["GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1"]
+
+    /// The author, age and summary from one `--line-porcelain` record; nil without an author.
+    private static func parseBlame(_ out: String) -> BlameInfo? {
         var author = "", summary = ""
         var ts: TimeInterval = 0
         for raw in out.split(separator: "\n", omittingEmptySubsequences: false) {
