@@ -213,6 +213,24 @@ re-probe these; the tests pin them.
   false` — the pre-commit marker is missing. `testAFailingPreCommitHookReportsItsOwnWords` stays
   green.
 
+## Committed contents and ignore verdicts — 10 Oct 2026
+
+- **`Git.headContents(paths:repoRoot:)`**: the raw blobs of many paths at `HEAD` from ONE
+  `cat-file --batch` (no filters, so no checkout's smudge command runs). Output carries file bytes,
+  so it is read undecoded through `runData`, which launches through the same private `launch` as
+  every other call (the environment, stripped variables and drained pipes are one code path).
+  Missing, ambiguous and tree records are skipped in step; a path with a newline is never sent (it
+  would be two requests and shift every record after it). Mutants, each failing
+  `GitHeadContentsTests`: the record's trailing LF not skipped (2), trees kept (2), `missing` not
+  recognised (2), output decoded as UTF-8 (1), newline paths sent (1).
+- **`Git.ignoredPaths(_:repoRoot:)`**: git's verdict for paths created after any cached listing
+  (`GitIgnoredSet` in swift-file-tools lists only what existed when it ran), from ONE
+  `check-ignore --stdin -z`. check-ignore refuses `GIT_LITERAL_PATHSPECS` ("pathspec magic not
+  supported by this command: 'literal'", measured) and its stdin names paths rather than patterns,
+  so that one variable is set to 0 for the call. Mutants, each failing
+  `testPathsCreatedAfterAnyListingAreJudgedByGitsRules`: the literal variable left on, nothing
+  ignored.
+
 ## Known non-issues (do not "fix" these again)
 
 - `Git.remoteURL(repoRoot:remote:)` has no caller in Sidewatch — public API, kept.
@@ -238,3 +256,4 @@ re-probe these; the tests pin them.
   codes, pseudo-branches, in-progress operations, commit, discard, checkpoints, blob hashes,
   out-of-root reads; 199 tests, ~155 s.
 - 9 Oct 2026 — security review: `core.fsmonitor=false` on every call, `core.hooksPath=/dev/null` on every call but `Git.commit` (section above); 202 tests.
+- 10 Oct 2026 — `Git.headContents`, `Git.ignoredPaths`, and `runData` over one private `launch` (section above); 210 tests.

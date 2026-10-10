@@ -136,12 +136,12 @@ public enum Git {
         return result.stdout
     }
 
-    /// Runs `git <args>` and returns everything it produced — the single place `git` launches.
+    /// Runs `git <args>` and returns everything it produced, decoded.
     ///
     /// For the calls whose failure the user must read in git's own words (a commit refused by a
-    /// hook). Goes through ``ProcessRunner``, which drains stdout and stderr concurrently: an
-    /// undrained stderr pipe deadlocks once git writes ~64 KB of warnings. The process runs under
-    /// ``environment(hooks:)`` with ``strippedVariables`` removed and `environment` layered last.
+    /// hook). Launches through `launch`, the one place `git` starts: ``ProcessRunner`` drains
+    /// stdout and stderr concurrently, since an undrained stderr pipe deadlocks once git writes
+    /// ~64 KB of warnings.
     public static func runCapturingError(
         _ args: [String], in dir: URL,
         environment: [String: String] = [:],
@@ -149,18 +149,36 @@ public enum Git {
         input: Data? = nil,
         hooks: Bool = false
     ) -> GitRunResult {
-        let result = ProcessRunner.run(
+        let result = launch(args, in: dir, environment: environment, timeout: timeout, input: input, hooks: hooks)
+        return GitRunResult(
+            status: result.status,
+            stdout: String(decoding: result.stdout, as: UTF8.self),
+            stderr: String(decoding: result.stderr, as: UTF8.self),
+            timedOut: result.timedOut)
+    }
+
+    /// Runs `git <args>` like ``run(_:in:environment:allowedStatuses:timeout:input:hooks:)`` and
+    /// returns standard output as BYTES, undecoded — for output that carries file contents
+    /// (`cat-file --batch`). `nil` when git failed to launch, timed out or exited non-zero.
+    static func runData(_ args: [String], in dir: URL, timeout: TimeInterval? = defaultTimeout, input: Data? = nil) -> Data? {
+        let result = launch(args, in: dir, environment: [:], timeout: timeout, input: input, hooks: false)
+        guard result.status == 0, !result.timedOut else { return nil }
+        return result.stdout
+    }
+
+    /// The single place `git` launches: through ``ProcessRunner``, which drains stdout and stderr
+    /// concurrently, under ``environment(hooks:)`` with ``strippedVariables`` removed and
+    /// `environment` layered last.
+    private static func launch(
+        _ args: [String], in dir: URL, environment: [String: String], timeout: TimeInterval?, input: Data?, hooks: Bool
+    ) -> ProcessRunner.Result {
+        ProcessRunner.run(
             executable, args,
             directory: dir,
             input: input,
             environment: Self.environment(hooks: hooks).merging(environment) { _, caller in caller },
             removing: strippedVariables,
             timeout: timeout)
-        return GitRunResult(
-            status: result.status,
-            stdout: String(decoding: result.stdout, as: UTF8.self),
-            stderr: String(decoding: result.stderr, as: UTF8.self),
-            timedOut: result.timedOut)
     }
 
     /// The repository root containing `dir`, or `nil` if `dir` is not inside a git repo.
