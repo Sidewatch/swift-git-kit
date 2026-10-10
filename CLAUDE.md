@@ -14,7 +14,7 @@ A thin, synchronous Swift wrapper over the `git` command-line tool — repositor
 - `Internal/` — non-public machinery: Git+Parsing, GitScratchIndex
 - `Models/` — value types — the shape of a thing, nothing else: BlameInfo, GitRunResult, GitStatusEntry, GitStatusMap, GitWorktree, HunkHeader, WorktreeSummary, SideBySideRow
 - `Support/` — pure helpers: GitDiffFlags, NameStatusParser, PorcelainStatusParser
-- `Operations/` — the engine: operations: Git+Actions, Git+Blame, Git+BlobHashes, Git+Checkpoint, Git+Clone, Git+Commit, Git+Diff, Git+InProgress, Git+Info, Git+Log, Git+MergeBase, Git+Status, Git+TextDiff, Git+WorkingTreeDiff, Git+Worktree, GitHubCLI
+- `Operations/` — the engine: operations: Git+Actions, Git+Blame, Git+BlobHashes, Git+Checkpoint, Git+Clone, Git+Commit, Git+Diff, Git+InProgress, Git+Info, Git+Init, Git+Log, Git+MergeBase, Git+Status, Git+TextDiff, Git+WorkingTreeDiff, Git+Worktree, GitHubCLI
 
 ## Rules
 
