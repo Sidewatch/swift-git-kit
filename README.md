@@ -18,6 +18,7 @@ A thin, synchronous Swift wrapper over the `git` command-line tool — repositor
 - 🛡️ **One launch point** — every call runs with literal pathspecs (`app/[id]/page.tsx` is a path, not a glob), without writing `.git/index` on a read (`GIT_OPTIONAL_LOCKS=0`, `diff.autoRefreshIndex=false`), without credential prompts, with the repository's own code kept out (`core.fsmonitor=false` always; `core.hooksPath=/dev/null` for everything but `Git.commit`, which runs the person's hooks), with the launching shell's `GIT_DIR`/`GIT_INDEX_FILE`/diff overrides stripped, with a timeout (60 s for reads, 600 s for commits, clones and captures), and with stdout decoded lossily so one stray byte cannot blank a diff. Every parsed `diff` carries `--no-ext-diff --no-textconv` and pinned prefixes and hunk context, so a user's diff configuration cannot change what is read
 - 🌳 **Worktree enumeration** — `Git.worktrees(repoRoot:)` lists every `GitWorktree` (path, branch, main/linked) via `git worktree list --porcelain`, with `isCurrent(relativeTo:)` for symlink-safe "which one am I in?" checks
 - 📊 **Worktree change summaries** — `Git.worktreeSummaries(repoRoot:)` pairs each worktree with a per-kind tally of its uncommitted changes (`WorktreeSummary` — `added`/`modified`/`deleted`/`untracked`/`renamed`/`conflicted`, `changeCount`, `isDirty`, plus `insertions`/`deletions`), for a parallel-agent review rail that shows "which worktree has unreviewed work". `Git.removeWorktree(_:repoRoot:force:)` archives a finished linked worktree (`git worktree remove`; refuses a dirty tree unless forced)
+- **Git-dir stamp** — `GitDirStamp.resolve(repoRoot:)` finds the files whose modification times move when git state does (HEAD, the index, reflogs, `FETCH_HEAD`, in-progress markers, the upstream ref, every remote's refs and every linked worktree's HEAD); `stat()` reads them with no spawn, so a poll can tell "something changed" from a few dozen stats instead of a subprocess, and `infoExcludeMoved` says when the ignore rules did.
 - 🗺️ **Status lookup map** — `GitStatusMap.build(status:repoRoot:)` turns a status list into O(1) per-path lookups: `kind(for:)` for a file's change kind and `directoryContainsChanges(_:)` for "does this collapsed folder hold changes?", keyed under every `/private/var` ↔ `/var` alias of the repo root so lookups never miss. `GitChangeKind.letter` gives the single-letter badge (A/M/D/R/U, C for a conflict)
 - 🪶 **Small** — Foundation plus swift-foundation-extensions (FoundationExtensions, ProcessRunner); shells out to the system `git`
 - 🧪 **Fully tested** — integration tests against throwaway repos (including linked and detached worktrees) plus direct unit tests of the diff-hunk and relative-time parsers, and the status-map path keying / ancestor marking / alias resolution
@@ -102,6 +103,13 @@ print(result.status, result.stdout, result.stderr, result.message)
 for tree in Git.worktrees(repoRoot: root) {
     let marker = tree.isCurrent(relativeTo: root) ? "→" : " "
     print(marker, tree.branch ?? "(detached)", tree.path.path, tree.isMain ? "[main]" : "")
+}
+
+// Cheap change detection: resolve once (three spawns), then stat on every tick (none).
+if var stamp = GitDirStamp.resolve(repoRoot: root) {
+    let before = stamp.stat()
+    // … later …
+    if stamp.stat() != before { print("git state moved") }
 }
 ```
 

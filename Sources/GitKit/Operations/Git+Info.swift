@@ -39,12 +39,6 @@ public extension Git {
         return (ahead, behind)
     }
 
-    /// The fetch URL of `remote` (default `origin`), or nil if it isn't configured.
-    static func remoteURL(repoRoot root: URL, remote: String = "origin") -> String? {
-        run(["remote", "get-url", remote], in: root)?
-            .trimmed
-    }
-
     /// True when the working tree AND index are clean (nothing to commit).
     static func isClean(repoRoot root: URL) -> Bool {
         (run(["status", "--porcelain"], in: root) ?? "")
