@@ -12,12 +12,14 @@ A thin, synchronous Swift wrapper over the `git` command-line tool — repositor
 - `Enums/` — enums with no behaviour beyond their cases and labels: GitChangeKind, GitOperation
 - `Errors/` — every Error type, one per file: GitCommitError
 - `Internal/` — non-public machinery: Git+Parsing, GitScratchIndex
-- `Models/` — value types — the shape of a thing, nothing else: BlameInfo, GitRunResult, GitStatusEntry, GitStatusMap, GitWorktree, HunkHeader, WorktreeSummary, SideBySideRow
+- `Models/` — value types — the shape of a thing, nothing else: BlameInfo, GitDirStamp, GitRunResult, GitStatusEntry, GitStatusMap, GitWorktree, HunkHeader, WorktreeSummary, SideBySideRow
 - `Support/` — pure helpers: GitDiffFlags, NameStatusParser, PorcelainStatusParser
-- `Operations/` — the engine: operations: Git+Actions, Git+Blame, Git+BlobHashes, Git+Checkpoint, Git+Clone, Git+Commit, Git+Diff, Git+InProgress, Git+Info, Git+Log, Git+MergeBase, Git+Status, Git+TextDiff, Git+WorkingTreeDiff, Git+Worktree, GitHubCLI
+- `Operations/` — the engine: operations: Git+Actions, Git+Blame, Git+BlobHashes, Git+Checkpoint, Git+Clone, Git+Commit, Git+Diff, Git+InProgress, Git+Info, Git+Init, Git+Log, Git+MergeBase, Git+Status, Git+TextDiff, Git+WorkingTreeDiff, Git+Worktree, GitDirStamp+Resolve, GitHubCLI
 
 ## Rules
 
-Read `CONTRIBUTING.md` before changing anything: it is the layout and PR rulebook for this package.
+Read `CONTRIBUTING.md` for the folder layout and the pull-request rules.
+
+@CONTRIBUTING.md
 
 - **Auditing? Read `AUDIT.md` first** — what the last full audit checked and fixed, and the known non-issues to skip; extend it, do not redo it.
