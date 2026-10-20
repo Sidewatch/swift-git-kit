@@ -61,9 +61,53 @@ public extension Git {
         return parseCommits(out)
     }
 
+    /// The commits that changed `path` (repository-relative), newest first, each with the patch
+    /// it made to the file — across renames (`--follow`). For "how did this file get here".
+    static func fileHistory(path: String, repoRoot root: URL, limit: Int = 50, ignoringWhitespace: Bool = false) -> [GitHistoryEntry] {
+        let out = run(
+            GitDiffFlags.quotePathOff
+                + [
+                    "log", "-n", "\(max(1, limit))", "--date=short", "--follow", "--no-show-signature", "-p",
+                    "--pretty=format:%x1e\(Self.commitFormat)",
+                ]
+                + GitDiffFlags.patch(ignoringWhitespace: ignoringWhitespace) + ["--", path],
+            in: root)
+        return parseHistory(out ?? "")
+    }
+
+    /// The commits that changed lines `lines` (1-based, inclusive) of `path` as they stand now,
+    /// newest first, each with the patch it made to that range (`git log -L`), the range followed
+    /// back through every edit that moved it. For "how did this function get here".
+    static func lineHistory(path: String, lines: ClosedRange<Int>, repoRoot root: URL, limit: Int = 50) -> [GitHistoryEntry] {
+        let range = "\(max(1, lines.lowerBound)),\(max(1, lines.upperBound)):\(path)"
+        let out = run(
+            GitDiffFlags.quotePathOff
+                + [
+                    "log", "-n", "\(max(1, limit))", "--date=short", "--no-show-signature",
+                    "--pretty=format:%x1e\(Self.commitFormat)",
+                ]
+                + GitDiffFlags.plain + GitDiffFlags.prefixed + ["-L", range],
+            in: root)
+        return parseHistory(out ?? "")
+    }
+
+    /// Splits `%x1e`-led records into entries: the first line of each is the commit, the rest its patch.
+    private static func parseHistory(_ out: String) -> [GitHistoryEntry] {
+        out.components(separatedBy: "\u{1e}").compactMap { record in
+            guard !record.isEmpty else { return nil }
+            let (head, rest) =
+                record.firstIndex(of: "\n").map { (String(record[..<$0]), String(record[record.index(after: $0)...])) }
+                ?? (record, "")
+            guard let commit = parseCommits(head).first else { return nil }
+            return GitHistoryEntry(commit: commit, patch: rest.trimmingCharacters(in: .newlines))
+        }
+    }
+
     /// The full patch for one commit (`git show`), for the History detail view. `nil` on error.
-    static func showCommit(_ hash: String, repoRoot root: URL) -> String? {
-        run(["show", "--no-show-signature", "--stat", "--patch"] + GitDiffFlags.patch + [hash], in: root)
+    static func showCommit(_ hash: String, repoRoot root: URL, ignoringWhitespace: Bool = false) -> String? {
+        run(
+            ["show", "--no-show-signature", "--stat", "--patch"] + GitDiffFlags.patch(ignoringWhitespace: ignoringWhitespace) + [hash],
+            in: root)
     }
 
     /// A file's content at `revision` (`git show <rev>:<path>`), for viewing a past version

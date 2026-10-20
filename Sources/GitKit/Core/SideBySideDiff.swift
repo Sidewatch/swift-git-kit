@@ -27,6 +27,21 @@ public enum SideBySideDiff {
         return (builder.left, builder.right)
     }
 
+    /// The changed words of each `modified` row pair (``IntralineDiff``), keyed by row index: a
+    /// removed line's spans on the left, its replacement's on the right. Rows of any other kind,
+    /// and pairs that are rewrites, get nothing.
+    public static func changedWords(
+        left: [SideBySideRow], right: [SideBySideRow]
+    ) -> (left: [Int: [NSRange]], right: [Int: [NSRange]]) {
+        var l: [Int: [NSRange]] = [:], r: [Int: [NSRange]] = [:]
+        for i in 0..<min(left.count, right.count) where left[i].kind == .modified && right[i].kind == .modified {
+            guard let pair = IntralineDiff.ranges(old: left[i].text, new: right[i].text) else { continue }
+            if !pair.old.isEmpty { l[i] = pair.old }
+            if !pair.new.isEmpty { r[i] = pair.new }
+        }
+        return (l, r)
+    }
+
     /// The walk's state: the two columns, the next line number per side, and the removed /
     /// added runs waiting to be paired.
     private struct Builder {

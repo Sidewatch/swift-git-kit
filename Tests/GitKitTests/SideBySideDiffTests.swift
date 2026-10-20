@@ -70,4 +70,14 @@ final class SideBySideDiffTests: XCTestCase {
         let (l2, r2) = SideBySideDiff.rows(from: "@@ -1,2 +0,0 @@\n-a\n-b\n")
         XCTAssertEqual(l2.map(\.kind), [.header, .removed, .removed]); XCTAssertEqual(r2.map(\.kind), [.header, .filler, .filler])
     }
+
+    func testChangedWordsMarkOnlyModifiedPairs() {
+        let diff = "@@ -1,3 +1,3 @@\n keep\n-let timeout = 30\n+let timeout = 60\n-gone entirely\n"
+        let (left, right) = SideBySideDiff.rows(from: diff)
+        let words = SideBySideDiff.changedWords(left: left, right: right)
+        let i = left.firstIndex { $0.kind == .modified }!
+        XCTAssertEqual(words.left[i].map { $0.map { (left[i].text as NSString).substring(with: $0) } }, ["30"])
+        XCTAssertEqual(words.right[i].map { $0.map { (right[i].text as NSString).substring(with: $0) } }, ["60"])
+        XCTAssertEqual(words.left.count, 1, "the unpaired removal gets nothing")
+    }
 }

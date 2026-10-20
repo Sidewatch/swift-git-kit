@@ -30,6 +30,14 @@ enum GitDiffFlags {
     /// headers prefixed `a/` and `b/`.
     static let patch = plain + ["--inter-hunk-context=0"] + prefixed
 
+    /// For a diff a person reads with whitespace set aside: `--ignore-all-space`, so a re-indent
+    /// or a reformat leaves only the lines whose words changed. Never for a diff whose line
+    /// numbers mark a buffer (the gutter's), which must see every change.
+    static let ignoringWhitespace = ["--ignore-all-space"]
+
+    /// The reading flags: ``patch``, plus ``ignoringWhitespace`` when asked.
+    static func patch(ignoringWhitespace: Bool) -> [String] { patch + (ignoringWhitespace ? Self.ignoringWhitespace : []) }
+
     /// `git -c core.quotePath=false`: non-ASCII paths come back verbatim in headers and
     /// `--name-status` output rather than C-quoted (`"caf\303\251"`).
     static let quotePathOff = ["-c", "core.quotePath=false"]

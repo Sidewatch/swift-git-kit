@@ -22,8 +22,11 @@ public extension Git {
     /// marked intent-to-add, so a new file is an `A` with its content, and a file `from` holds
     /// that is untracked now and unchanged is not reported at all. The real index is never
     /// written; the scratch one is deleted afterwards. With `nameStatus` the output is
-    /// `--name-status -z` (``workingTreeChangedFiles(repoRoot:from:paths:)`` parses it).
-    static func workingTreeDiff(repoRoot: URL, from: String, paths: [String] = [], nameStatus: Bool = false) -> String? {
+    /// `--name-status -z` (``workingTreeChangedFiles(repoRoot:from:paths:)`` parses it). With
+    /// `ignoringWhitespace` a patch leaves out changes that are only whitespace.
+    static func workingTreeDiff(
+        repoRoot: URL, from: String, paths: [String] = [], nameStatus: Bool = false, ignoringWhitespace: Bool = false
+    ) -> String? {
         let scratch = GitScratchIndex()
         defer { scratch.remove() }
         scratch.copyIndex(of: repoRoot)  // a repository with no index yet starts empty
@@ -31,7 +34,7 @@ public extension Git {
         // `--name-status` lists a stat-stale file as `M` under the package-wide
         // `diff.autoRefreshIndex=false`; turning it back on here refreshes the SCRATCH index only.
         let config = nameStatus ? ["-c", "diff.autoRefreshIndex=true"] : []
-        let flags = nameStatus ? ["--name-status", "-z"] : GitDiffFlags.patch
+        let flags = nameStatus ? ["--name-status", "-z"] : GitDiffFlags.patch(ignoringWhitespace: ignoringWhitespace)
         let pathspec = paths.isEmpty ? [] : ["--"] + paths
         return run(
             GitDiffFlags.quotePathOff + config + ["diff"] + flags + [from] + pathspec,

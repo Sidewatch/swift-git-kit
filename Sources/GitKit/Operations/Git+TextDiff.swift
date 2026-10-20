@@ -15,8 +15,8 @@ extension Git {
     /// The unified diff from `old` to `new`, headed `a/<oldName>` and `b/<newName>`, through
     /// `git diff --no-index` — the same engine and output shape as every other diff git gives
     /// back, so a caller that renders repository diffs renders this one too. Empty when the texts
-    /// are the same or git cannot run.
-    public static func unifiedDiff(old: String, new: String, oldName: String, newName: String) -> String {
+    /// are the same or git cannot run, or (with `ignoringWhitespace`) differ only in whitespace.
+    public static func unifiedDiff(old: String, new: String, oldName: String, newName: String, ignoringWhitespace: Bool = false) -> String {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("gitkit-textdiff-\(getpid())-\(UUID().uuidString)", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -25,7 +25,8 @@ extension Git {
         guard (try? old.write(to: a, atomically: true, encoding: .utf8)) != nil,
             (try? new.write(to: b, atomically: true, encoding: .utf8)) != nil,
             let text = run(
-                GitDiffFlags.quotePathOff + ["diff"] + GitDiffFlags.patch + ["--no-index", "--", a.path, b.path],
+                GitDiffFlags.quotePathOff + ["diff"] + GitDiffFlags.patch(ignoringWhitespace: ignoringWhitespace)
+                    + ["--no-index", "--", a.path, b.path],
                 in: dir, allowedStatuses: [1])  // 1 = "they differ"
         else { return "" }
         // git names the temp files — "a/var/…/a", the leading slash dropped under its prefix —

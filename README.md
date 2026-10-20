@@ -65,6 +65,20 @@ let removed = Git.removedLines(for: fileURL, repoRoot: root)   // [Int: [String]
 let everything = Git.workingTreeDiff(repoRoot: root, from: Git.diffBase(repoRoot: root))
 let changed = Git.workingTreeChangedFiles(repoRoot: root, from: "HEAD")   // [GitStatusEntry]
 
+// Each open file's diff against HEAD from ONE batched git diff: untracked files as all-new,
+// clean files "", an unborn HEAD against the empty tree. Every reading diff takes `ignoringWhitespace`
+// (`--ignore-all-space`); the gutter's line marks above never do.
+let perFile = Git.headDiffs(paths: ["a.swift", "new.txt"], repoRoot: root, ignoringWhitespace: true)  // [String: String]
+let chunks = DiffChunks.byPath(everything ?? "")   // a multi-file diff split back per file
+
+// The words that changed inside changed lines, for tinting over the line's own colour.
+let words = IntralineDiff.marks(in: diffText.components(separatedBy: "\n"))   // [line index: [NSRange]]
+let pair = IntralineDiff.ranges(old: "timeout: 30", new: "timeout: 60")    // old ["30"], new ["60"]
+
+// History: one file's commits with their patches (across renames), or one line range's (git log -L).
+let fileHistory = Git.fileHistory(path: "Sources/App.swift", repoRoot: root)             // [GitHistoryEntry]
+let rangeHistory = Git.lineHistory(path: "Sources/App.swift", lines: 40...62, repoRoot: root)
+
 // Who last touched line 42?
 if let blame = Git.blame(for: fileURL, line: 42, repoRoot: root) {
     print("\(blame.author) · \(blame.timeAgo) · \(blame.summary)")

@@ -103,11 +103,16 @@ public extension Git {
     /// The working-tree comparison is ``workingTreeDiff(repoRoot:from:paths:nameStatus:)``: one
     /// process through a scratch index, untracked files included, and the real index never
     /// written — nothing is hashed into a throwaway commit on every refresh.
-    static func checkpointDiff(from: String, to: String?, path: String? = nil, repoRoot: URL) -> String? {
+    static func checkpointDiff(
+        from: String, to: String?, path: String? = nil, repoRoot: URL, ignoringWhitespace: Bool = false
+    ) -> String? {
         let paths = path.map { [$0] } ?? []
-        guard let target = to else { return workingTreeDiff(repoRoot: repoRoot, from: from, paths: paths) }
+        guard let target = to else {
+            return workingTreeDiff(repoRoot: repoRoot, from: from, paths: paths, ignoringWhitespace: ignoringWhitespace)
+        }
         return run(
-            GitDiffFlags.quotePathOff + ["diff"] + GitDiffFlags.patch + [from, target] + (paths.isEmpty ? [] : ["--"] + paths),
+            GitDiffFlags.quotePathOff + ["diff"] + GitDiffFlags.patch(ignoringWhitespace: ignoringWhitespace) + [from, target]
+                + (paths.isEmpty ? [] : ["--"] + paths),
             in: repoRoot)
     }
 
