@@ -41,6 +41,7 @@ final class FileAtHeadTests: XCTestCase {
     func testHeadCommitAndWorkTree() throws {
         XCTAssertNil(Git.headCommit(repoRoot: repo.root), "no commits yet")
         XCTAssertTrue(Git.isInsideWorkTree(repo.root))
+        XCTAssertFalse(Git.isInsideWorkTree(repo.root.appendingPathComponent(".git")), "git answers false, exit 0, inside .git")
         try repo.write("x\n", to: "x.txt")
         let sha = repo.commitAll("x")
         XCTAssertEqual(Git.headCommit(repoRoot: repo.root), sha)
