@@ -69,4 +69,48 @@ final class HeadDiffTests: XCTestCase {
         XCTAssertEqual(chunks.keys.sorted(), ["gone.txt", "kept.txt", "mode.sh"])
         XCTAssertTrue(chunks["kept.txt"]?.hasSuffix("+++ b/not-a-path\n") == true, "an added line reading `++ b/…` never renames its chunk")
     }
+
+    func testSummaryReadsPathCountsAndKind() {
+        let chunks = DiffChunks.ordered(
+            """
+            diff --git a/My Notes.md b/My Notes.md
+            --- a/My Notes.md	
+            +++ b/My Notes.md	
+            @@ -1,2 +1,2 @@
+            --- not a header
+            +new
+            diff --git a/old.txt b/new.txt
+            similarity index 100%
+            rename from old.txt
+            rename to new.txt
+            diff --git a/gone.txt b/gone.txt
+            deleted file mode 100644
+            --- a/gone.txt
+            +++ /dev/null
+            @@ -1 +0,0 @@
+            -bye
+            diff --git "a/tab\there" "b/tab\there"
+            new file mode 100644
+            --- /dev/null
+            +++ "b/tab\there"
+            @@ -0,0 +1 @@
+            +x
+
+            """)
+        let summaries = chunks.map(DiffChunks.summary)
+        XCTAssertEqual(summaries[0], DiffFileSummary(path: "My Notes.md", insertions: 1, deletions: 1, kind: .modified))
+        XCTAssertEqual(summaries[1], DiffFileSummary(path: "new.txt", insertions: 0, deletions: 0, kind: .renamed(from: "old.txt")))
+        XCTAssertEqual(summaries[2], DiffFileSummary(path: "gone.txt", insertions: 0, deletions: 1, kind: .deleted))
+        XCTAssertEqual(
+            summaries[3], DiffFileSummary(path: "tab\there", insertions: 1, deletions: 0, kind: .added), "a quoted path is decoded")
+        XCTAssertEqual(
+            DiffChunks.byPath(chunks.flatMap { $0 }.joined(separator: "\n")).keys.sorted(),
+            ["My Notes.md", "gone.txt", "new.txt", "tab\there"])
+    }
+
+    func testUnquoteDecodesOctalUTF8() {
+        XCTAssertEqual(DiffChunks.unquote("\"caf\\303\\251.txt\""), "café.txt")
+        XCTAssertEqual(DiffChunks.unquote("\"a\\tb\\\"c\""), "a\tb\"c", "the \\t and \\\" escapes")
+        XCTAssertEqual(DiffChunks.unquote("plain.txt"), "plain.txt")
+    }
 }

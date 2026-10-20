@@ -17,6 +17,19 @@ public extension Git {
 
     // `currentBranch(repoRoot:)` lives in Git+Worktree.
 
+    /// The full SHA `HEAD` points at, or nil in a repository with no commits yet (or outside one).
+    static func headCommit(repoRoot root: URL) -> String? {
+        guard let sha = run(["rev-parse", "--verify", "--quiet", "HEAD"], in: root)?.trimmingCharacters(in: .whitespacesAndNewlines),
+            !sha.isEmpty
+        else { return nil }
+        return sha
+    }
+
+    /// Whether `folder` is inside a git working tree (a checkout, or a folder within one).
+    static func isInsideWorkTree(_ folder: URL) -> Bool {
+        run(["rev-parse", "--is-inside-work-tree"], in: folder)?.trimmingCharacters(in: .whitespacesAndNewlines) == "true"
+    }
+
     /// Local branches (`refs/heads`), each flagged if it's the checked-out one. None is current on
     /// a detached `HEAD` or mid-rebase — `git branch` would list a `(no branch, rebasing x)`
     /// pseudo-entry there, which is not a branch.

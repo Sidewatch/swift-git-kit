@@ -9,12 +9,12 @@ A thin, synchronous Swift wrapper over the `git` command-line tool — repositor
 ## Module map
 
 - `Core/` — the engine: Git (the one launch point: fixed environment, stripped variables, timeouts, lossy decode), SideBySideDiff (+ `changedWords` for modified pairs), IntralineDiff (the words that changed inside a changed line: token LCS, a rewrite under 40% shared gets nothing, UTF-16 ranges; `marks(in:)` pairs a unified diff's removed/added runs)
-- `Enums/` — enums with no behaviour beyond their cases and labels: GitChangeKind, GitOperation
+- `Enums/` — enums with no behaviour beyond their cases and labels: GitChangeKind, GitOperation, DiffFileKind (added / deleted / renamed / modified / binary, read from a file's diff header)
 - `Errors/` — every Error type, one per file: GitCommitError
 - `Internal/` — non-public machinery: Git+Parsing, GitScratchIndex
-- `Models/` — value types — the shape of a thing, nothing else: BlameInfo, GitDirStamp, GitRunResult, GitStatusEntry, GitStatusMap, GitWorktree, HunkHeader, WorktreeSummary, SideBySideRow, GitHistoryEntry (a commit with its patch to one file or line range)
-- `Support/` — pure helpers: GitDiffFlags (`patch(ignoringWhitespace:)`: `--ignore-all-space` for diffs a person reads, never the gutter's), DiffChunks (a multi-file diff split back per path), NameStatusParser, PorcelainStatusParser
-- `Operations/` — the engine: operations: Git+Actions, Git+Blame, Git+BlobHashes, Git+Checkpoint, Git+Clone, Git+Commit, Git+Diff, Git+HeadDiff (each file's diff against HEAD from one batched run), Git+InProgress, Git+Info, Git+Init, Git+Log (+ fileHistory across renames, lineHistory via `log -L`), Git+MergeBase, Git+Status, Git+TextDiff, Git+WorkingTreeDiff, Git+Worktree, GitDirStamp+Resolve, GitHubCLI
+- `Models/` — value types — the shape of a thing, nothing else: BlameInfo, DiffFileSummary (one file's paths, kind and +/− counts from its diff), GitDirStamp, GitRunResult, GitStatusEntry, GitStatusMap, GitWorktree, HunkHeader, WorktreeSummary, SideBySideRow, GitHistoryEntry (a commit with its patch to one file or line range)
+- `Support/` — pure helpers: GitDiffFlags (`patch(ignoringWhitespace:)`: `--ignore-all-space` for diffs a person reads, never the gutter's), DiffChunks (a multi-file diff split back per path, in order or by path; `summary(of:)`; git's C-quoted paths unquoted), NameStatusParser, PorcelainStatusParser
+- `Operations/` — the engine: operations: Git+Actions, Git+Blame, Git+BlobHashes, Git+Checkpoint, Git+Clone, Git+Commit, Git+Diff, Git+FileAtHead (`headText(of:)`, `addedLines(for:)`: the two reads every change fact starts from), Git+HeadDiff (each file's diff against HEAD from one batched run), Git+InProgress, Git+Info (+ `headCommit`, `isInsideWorkTree`), Git+Init, Git+Log (+ fileHistory across renames, lineHistory via `log -L`), Git+MergeBase, Git+Status, Git+TextDiff, Git+WorkingTreeDiff, Git+Worktree, GitDirStamp+Resolve, GitHubCLI
 
 ## Rules
 

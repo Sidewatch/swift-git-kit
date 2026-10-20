@@ -70,6 +70,12 @@ let changed = Git.workingTreeChangedFiles(repoRoot: root, from: "HEAD")   // [Gi
 // (`--ignore-all-space`); the gutter's line marks above never do.
 let perFile = Git.headDiffs(paths: ["a.swift", "new.txt"], repoRoot: root, ignoringWhitespace: true)  // [String: String]
 let chunks = DiffChunks.byPath(everything ?? "")   // a multi-file diff split back per file
+let summary = DiffChunks.summary(of: chunks["a.swift"] ?? "")   // DiffFileSummary: paths, kind, +/− counts
+
+// The file as HEAD has it, the lines the working tree added, and HEAD's commit.
+let before = Git.headText(of: "a.swift", repoRoot: root)        // nil for a new file
+let added = Git.addedLines(for: "a.swift", repoRoot: root)      // [String]
+let sha = Git.headCommit(repoRoot: root)                         // nil before the first commit
 
 // The words that changed inside changed lines, for tinting over the line's own colour.
 let words = IntralineDiff.marks(in: diffText.components(separatedBy: "\n"))   // [line index: [NSRange]]
