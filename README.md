@@ -106,6 +106,20 @@ if let op = Git.inProgressOperation(repoRoot: root) {
     print(op, Git.rebaseHeadName(repoRoot: root) ?? "")   // e.g. rebase feature-x
 }
 
+// Everything a branch indicator shows, in one call (off the main thread).
+let status = Git.branchStatus(repoRoot: root)      // branch, detached, operation, ahead/behind, worktrees
+let linked = status.isLinkedWorktree(root)          // a `git worktree add` checkout, not the main one
+let alive = Git.commitExists(storedSHA, repoRoot: root)
+
+// A folder holding several repositories: which one a file belongs to, and one git call per repository.
+let checkouts = CheckoutSet(primary: Git.repoRoot(for: folder), nested: nestedRoots)
+let owner = checkouts.root(for: fileURL)            // the deepest checkout holding it, else the primary
+let (byRoot, outside) = checkouts.grouped(openFiles) // [root: [file: relative path]]
+
+// A hunk header's section heading, and hunks that only change whitespace.
+let section = HunkHeader.section(of: "@@ -10,3 +10,4 @@ func render() {")   // "func render() {"
+let reindentOnly = HunkHeader.isWhitespaceOnly(hunkBodyLines)
+
 // Which branch is checked out? (short SHA when HEAD is detached)
 let branch = Git.currentBranch(repoRoot: root)   // e.g. "main"
 
