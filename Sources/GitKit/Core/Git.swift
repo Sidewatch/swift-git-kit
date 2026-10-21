@@ -204,26 +204,23 @@ public enum Git {
         under root: URL, skipping skip: Set<String>,
         maxDepth: Int = 6, limit: Int = 64
     ) -> [URL] {
-        let fm = FileManager.default
-        guard
-            let en = fm.enumerator(
-                at: root, includingPropertiesForKeys: [.isDirectoryKey],
-                options: [.skipsPackageDescendants])
-        else { return [] }
+        // `walk`, not `enumerator(at:)`: a folder opened through a link is a root that IS a symbolic
+        // link, which the plain enumerator lists nothing under.
         let rootPath = root.standardizedFileURL.path
+        let rootDepth = root.standardizedFileURL.pathComponents.count
         var out: [URL] = []
-        for case let url as URL in en {
+        FileManager.default.walk(root, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsPackageDescendants]) { url in
             let name = url.lastPathComponent
             let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
             if name == ".git" {
                 let owner = url.deletingLastPathComponent()
                 if owner.standardizedFileURL.path != rootPath { out.append(owner) }
-                if isDir { en.skipDescendants() }
-                if out.count >= limit { break }
-                continue
+                if out.count >= limit { return .stop }
+                return isDir ? .skipDescendants : .next
             }
-            guard isDir else { continue }
-            if skip.contains(name) || en.level >= maxDepth { en.skipDescendants() }
+            guard isDir else { return .next }
+            let depth = url.standardizedFileURL.pathComponents.count - rootDepth  // the enumerator's `level`
+            return skip.contains(name) || depth >= maxDepth ? .skipDescendants : .next
         }
         return out
     }

@@ -69,6 +69,17 @@ final class NestedRepoTests: XCTestCase {
         XCTAssertEqual(found(maxDepth: 8), ["a/b/c", "d/e/f/g/h/i/j"])
     }
 
+    /// A folder opened through a link: the root IS a symbolic link, which `enumerator(at:)` lists
+    /// nothing under. Its checkouts are found, spelled under the link.
+    func testCheckoutsBelowALinkedRootAreFound() throws {
+        try mkdir("site/wp-content/plugins/edd/.git")
+        let link = tmp.appendingPathComponent("linked")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: tmp.appendingPathComponent("site"))
+        XCTAssertEqual(
+            Git.nestedRepoRoots(under: link, skipping: [], maxDepth: 6).map(\.path),
+            [link.appendingPathComponent("wp-content/plugins/edd").path])
+    }
+
     /// Merge: the nested repo's kinds win over the outer repo's view of the same
     /// path, dots union, and — with a top folder — dots climb to it.
     func testMergeLaysNestedOverOuterAndPropagatesDots() {

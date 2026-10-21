@@ -8,7 +8,7 @@ A thin, synchronous Swift wrapper over the `git` command-line tool — repositor
 
 ## Module map
 
-- `Core/` — the engine: Git (the one launch point: fixed environment, stripped variables, timeouts, lossy decode), SideBySideDiff (+ `changedWords` for modified pairs), IntralineDiff (the words that changed inside a changed line: token LCS, a rewrite under 40% shared gets nothing, UTF-16 ranges; `marks(in:)` pairs a unified diff's removed/added runs)
+- `Core/` — the engine: Git (the one launch point: fixed environment, stripped variables, timeouts, lossy decode), SideBySideDiff (+ `changedWords` for modified pairs), IntralineDiff (the words that changed inside a changed line: token LCS, a rewrite under 40% shared gets nothing, UTF-16 ranges; `marks(in:)` pairs a unified diff's removed/added runs) — `nestedRepoRoots` walks with FoundationExtensions `FileManager.walk`, so a folder opened through a link finds its checkouts
 - `Enums/` — enums with no behaviour beyond their cases and labels: GitChangeKind, GitOperation, DiffFileKind (added / deleted / renamed / modified / binary, read from a file's diff header)
 - `Errors/` — every Error type, one per file: GitCommitError
 - `Internal/` — non-public machinery: Git+Parsing, GitScratchIndex
