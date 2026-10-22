@@ -64,6 +64,31 @@ final class GitCloneAndLogTests: XCTestCase {
         XCTAssertFalse(commits.first?.hash.isEmpty ?? true)
     }
 
+    /// The author and commit times, to the second, whatever zone they were written in; a subject
+    /// may hold the separator-looking characters a format could trip on.
+    func testLogCarriesTheAuthorAndCommitTimes() throws {
+        let root = try tempDir("gitlogdates")
+        seedRepo(root, commits: [])
+        try "x".write(to: root.appendingPathComponent("a.txt"), atomically: true, encoding: .utf8)
+        _ = Git.run(["add", "-A"], in: root)
+        _ = Git.run(
+            ["commit", "-q", "-m", "fix: 50% of 2026-10-22 · done"], in: root,
+            environment: ["GIT_AUTHOR_DATE": "2026-10-22T09:15:30+01:00", "GIT_COMMITTER_DATE": "2026-10-22T10:00:05Z"])
+        let commit = try XCTUnwrap(Git.log(repoRoot: root, limit: 1).first)
+        XCTAssertEqual(commit.authorDate, ISO8601DateFormatter().date(from: "2026-10-22T08:15:30Z"))
+        XCTAssertEqual(commit.committerDate, ISO8601DateFormatter().date(from: "2026-10-22T10:00:05Z"))
+        XCTAssertEqual(commit.subject, "fix: 50% of 2026-10-22 · done")
+        XCTAssertEqual(Git.fileLog(path: "a.txt", repoRoot: root).first?.authorDate, commit.authorDate)
+    }
+
+    func testARecordWithoutTimesIsSkipped() {
+        let good = "a\u{1f}b\u{1f}T\u{1f}1761120930\u{1f}1761124805\u{1f}subject"
+        XCTAssertEqual(Git.parseCommits(good).count, 1)
+        XCTAssertTrue(Git.parseCommits("a\u{1f}b\u{1f}T\u{1f}2026-10-22\u{1f}x\u{1f}subject").isEmpty)
+        XCTAssertTrue(Git.parseCommits("a\u{1f}b\u{1f}T\u{1f}1761120930\u{1f}subject").isEmpty)
+        XCTAssertTrue(Git.parseCommits("a\u{1f}b\u{1f}T\u{1f}1761120930\u{1f}1761124805").isEmpty, "both times, no subject field")
+    }
+
     func testLogRespectsLimit() throws {
         let root = try tempDir("gitloglimit")
         seedRepo(root, commits: ["a", "b", "c", "d"])

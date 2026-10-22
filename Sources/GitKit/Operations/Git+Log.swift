@@ -18,15 +18,18 @@ public struct GitCommit: Equatable, Sendable {
     public let shortHash: String
     /// The author's name.
     public let author: String
-    /// The author date as `YYYY-MM-DD`.
-    public let date: String
+    /// When the change was written (`%at`) — what a history lists.
+    public let authorDate: Date
+    /// When the commit was made (`%ct`); later than ``authorDate`` after a rebase, an amend or
+    /// a cherry-pick.
+    public let committerDate: Date
     /// The first line of the message.
     public let subject: String
 
     /// Creates a commit record.
-    public init(hash: String, shortHash: String, author: String, date: String, subject: String) {
+    public init(hash: String, shortHash: String, author: String, authorDate: Date, committerDate: Date, subject: String) {
         self.hash = hash; self.shortHash = shortHash; self.author = author
-        self.date = date; self.subject = subject
+        self.authorDate = authorDate; self.committerDate = committerDate; self.subject = subject
     }
 }
 
@@ -41,7 +44,7 @@ public extension Git {
         guard
             let out = run(
                 [
-                    "log", "-n", "\(max(1, limit))", "--date=short", "--no-show-signature",
+                    "log", "-n", "\(max(1, limit))", "--no-show-signature",
                     "--pretty=format:\(Self.commitFormat)",
                 ], in: root)
         else { return [] }
@@ -54,7 +57,7 @@ public extension Git {
         guard
             let out = run(
                 [
-                    "log", "-n", "\(max(1, limit))", "--date=short", "--follow", "--no-show-signature",
+                    "log", "-n", "\(max(1, limit))", "--follow", "--no-show-signature",
                     "--pretty=format:\(Self.commitFormat)", "--", path,
                 ], in: root)
         else { return [] }
@@ -67,7 +70,7 @@ public extension Git {
         let out = run(
             GitDiffFlags.quotePathOff
                 + [
-                    "log", "-n", "\(max(1, limit))", "--date=short", "--follow", "--no-show-signature", "-p",
+                    "log", "-n", "\(max(1, limit))", "--follow", "--no-show-signature", "-p",
                     "--pretty=format:%x1e\(Self.commitFormat)",
                 ]
                 + GitDiffFlags.patch(ignoringWhitespace: ignoringWhitespace) + ["--", path],
@@ -83,7 +86,7 @@ public extension Git {
         let out = run(
             GitDiffFlags.quotePathOff
                 + [
-                    "log", "-n", "\(max(1, limit))", "--date=short", "--no-show-signature",
+                    "log", "-n", "\(max(1, limit))", "--no-show-signature",
                     "--pretty=format:%x1e\(Self.commitFormat)",
                 ]
                 + GitDiffFlags.plain + GitDiffFlags.prefixed + ["-L", range],
@@ -116,15 +119,18 @@ public extension Git {
         run(["show", "\(revision):\(path)"], in: root)
     }
 
-    /// The unit-separator pretty-format shared by ``log`` and ``fileLog``.
-    private static var commitFormat: String { "%H%x1f%h%x1f%an%x1f%ad%x1f%s" }
+    /// The unit-separator pretty-format shared by ``log`` and ``fileLog``: the dates as Unix
+    /// seconds, which carry the time and need no parsing of a zone.
+    private static var commitFormat: String { "%H%x1f%h%x1f%an%x1f%at%x1f%ct%x1f%s" }
 
     /// Parses newline-separated `commitFormat` records into ``GitCommit``s.
-    private static func parseCommits(_ out: String) -> [GitCommit] {
+    static func parseCommits(_ out: String) -> [GitCommit] {
         out.split(separator: "\n", omittingEmptySubsequences: true).compactMap { line in
             let f = line.components(separatedBy: "\u{1f}")
-            guard f.count == 5 else { return nil }
-            return GitCommit(hash: f[0], shortHash: f[1], author: f[2], date: f[3], subject: f[4])
+            guard f.count == 6, let authored = TimeInterval(f[3]), let committed = TimeInterval(f[4]) else { return nil }
+            return GitCommit(
+                hash: f[0], shortHash: f[1], author: f[2], authorDate: Date(timeIntervalSince1970: authored),
+                committerDate: Date(timeIntervalSince1970: committed), subject: f[5])
         }
     }
 }
