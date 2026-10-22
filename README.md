@@ -126,6 +126,7 @@ let branch = Git.currentBranch(repoRoot: root)   // e.g. "main"
 // Hash many working-tree files in one process; a missing or unreadable path has no key.
 let hashes = Git.blobHashes(paths: ["a.swift", "b.swift"], repoRoot: root)   // [String: String]
 let before = Git.headContents(paths: ["a.swift", "b.swift"], repoRoot: root) // [String: Data], raw blobs at HEAD, one cat-file
+let versions = Git.fileVersions(path: "a.swift", commits: [sha1, sha2], repoRoot: root) // [Data?], nil where a commit lacks it
 let ignored = Git.ignoredPaths(["dist/new.js", "src/a.swift"], repoRoot: root)  // Set<String>, git check-ignore, one run
 
 // Raw calls go through the same launch point (environment, timeout, lossy decode).

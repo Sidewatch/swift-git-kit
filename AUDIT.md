@@ -257,3 +257,4 @@ re-probe these; the tests pin them.
   out-of-root reads; 199 tests, ~155 s.
 - 9 Oct 2026 — security review: `core.fsmonitor=false` on every call, `core.hooksPath=/dev/null` on every call but `Git.commit` (section above); 202 tests.
 - 10 Oct 2026 — `Git.headContents`, `Git.ignoredPaths`, and `runData` over one private `launch` (section above); 210 tests.
+- 23 Oct 2026 — `Git.fileVersions` / `blobIDs`: one file at many commits from two cat-file runs; only object ids are asked (a `HEAD` or `--batch` never reaches git); 5 tests, 5 mutants each failing (two only after the tests were tightened: a newline path reading the file named by its first half, and a tree taken as a blob).
