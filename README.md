@@ -131,6 +131,10 @@ case .success(let target): print("pushed to", target.name)       // "origin/main
 case .failure(.noRemote), .failure(.detachedHead): break
 case .failure(.failed(let stderr)): print(stderr)                // a rejection or a pre-push hook, in git's words
 }
+if let diff = Git.gutterDiff(for: fileURL, repoRoot: root),                  // the -U0 diff the gutter marks
+    case .edit(let edit) = HunkRevert.edit(at: 42, in: text, diff: diff) {    // the change at line 42 …
+    textView.insertText(edit.replacement, replacementRange: edit.range)      // … put back as HEAD has it, undoably
+}
 let versions = Git.fileVersions(path: "a.swift", commits: [sha1, sha2], repoRoot: root) // [Data?], nil where a commit lacks it
 let ignored = Git.ignoredPaths(["dist/new.js", "src/a.swift"], repoRoot: root)  // Set<String>, git check-ignore, one run
 

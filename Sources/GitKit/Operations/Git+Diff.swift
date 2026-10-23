@@ -33,10 +33,17 @@ public extension Git {
     /// ``removedLines(for:repoRoot:)`` does, where calling both would run the same diff twice.
     /// Empty, without running git, for a file outside `root`.
     static func lineDiff(for file: URL, repoRoot root: URL) -> (marks: [Int: GitChangeKind], removed: [Int: [String]]) {
-        guard let rel = relativePathIfUnderRoot(file, root: root),
-            let diff = diffAgainstBase(["diff"] + GitDiffFlags.unifiedZero, paths: [rel], in: root)
-        else { return ([:], [:]) }
+        guard let diff = gutterDiff(for: file, repoRoot: root) else { return ([:], [:]) }
         return parseLineDiff(diff)
+    }
+
+    /// The one-file `--unified=0` diff against `HEAD` (or the base of an unborn branch) that the
+    /// gutter's marks are read from — what ``HunkRevert/edit(at:in:diff:)`` undoes a change from,
+    /// so an undo acts on exactly the hunk the gutter shows. Nil for a file outside `root` or a
+    /// failed diff.
+    static func gutterDiff(for file: URL, repoRoot root: URL) -> String? {
+        guard let rel = relativePathIfUnderRoot(file, root: root) else { return nil }
+        return diffAgainstBase(["diff"] + GitDiffFlags.unifiedZero, paths: [rel], in: root)
     }
 
     /// A unified diff presenting an untracked file as all-new content, which `git diff HEAD`
