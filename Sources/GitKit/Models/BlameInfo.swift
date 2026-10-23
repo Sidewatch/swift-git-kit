@@ -13,7 +13,7 @@ import Foundation
 /// Authorship information for a single line, produced by ``Git/blame(for:line:repoRoot:)``.
 public struct BlameInfo: Sendable, Equatable {
 
-    /// The author's name, or `"Not Committed Yet"` for uncommitted lines.
+    /// The author's name, or ``uncommittedAuthor`` for uncommitted lines.
     public let author: String
 
     /// A short human-readable age of the commit (e.g. `"3d ago"`), or `""` when unavailable.
@@ -29,4 +29,13 @@ public struct BlameInfo: Sendable, Equatable {
         self.timeAgo = timeAgo
         self.summary = summary
     }
+
+    /// The author git's blame names for a line no commit has: `"Not Committed Yet"`.
+    public static let uncommittedAuthor = "Not Committed Yet"
+
+    /// A line no commit has, with no age or summary — what a caller shows when blame has no answer.
+    public static let uncommitted = BlameInfo(author: uncommittedAuthor, timeAgo: "", summary: "")
+
+    /// Whether no commit has this line yet.
+    public var isUncommitted: Bool { author == Self.uncommittedAuthor }
 }

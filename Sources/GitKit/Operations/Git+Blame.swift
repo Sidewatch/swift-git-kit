@@ -15,7 +15,7 @@ public extension Git {
 
     /// Blame for one 1-based working-tree line (fast: `blame -L n,n`), or `nil` when `line` is
     /// out of range, `file` is outside `root` (without running git), or blame fails.
-    /// Uncommitted lines report author `"Not Committed Yet"`.
+    /// Uncommitted lines report ``BlameInfo/uncommittedAuthor`` (``BlameInfo/isUncommitted``).
     ///
     /// A failure is retried once with the user's global and system configuration ignored: a
     /// global `blame.ignoreRevsFile` naming a file this repository lacks makes every blame exit 128.

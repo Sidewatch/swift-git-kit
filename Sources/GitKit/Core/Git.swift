@@ -54,7 +54,7 @@ public enum Git {
     ///   off for every call.
     ///
     /// The env form (`GIT_CONFIG_COUNT` / `KEY_n` / `VALUE_n`) outranks every config file.
-    /// Hooks a call runs (`commit`) inherit these; ``environment(hooks:)`` adds the hooks rule.
+    /// Hooks a call runs (`commit`, `push`) inherit these; ``environment(hooks:)`` adds the hooks rule.
     static let fixedEnvironment: [String: String] = [
         "GIT_LITERAL_PATHSPECS": "1",
         "GIT_OPTIONAL_LOCKS": "0",
@@ -70,8 +70,8 @@ public enum Git {
     ///
     /// A repository's hooks are its own executable code: `post-index-change` runs on a `git add`,
     /// `post-checkout` on a restore, and a clone can ship any of them. A read, a stage, a restore
-    /// or a checkpoint through this package never runs one. `commit` does — a person expects
-    /// their pre-commit hook to run when they commit — so it alone passes `hooks: true`.
+    /// or a checkpoint through this package never runs one. `commit` and `push` do — a person
+    /// expects their pre-commit and pre-push hooks to run — so they alone pass `hooks: true`.
     static func environment(hooks: Bool) -> [String: String] {
         guard !hooks else { return fixedEnvironment }
         var env = fixedEnvironment

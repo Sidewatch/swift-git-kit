@@ -585,6 +585,18 @@ final class GitKitTests: XCTestCase {
         XCTAssertNil(Git.blame(for: root.appendingPathComponent("b.txt"), line: 0, repoRoot: root))
     }
 
+    func testAnUncommittedLineIsMarkedSo() throws {
+        let root = try makeRepo()
+        let file = root.appendingPathComponent("b.txt")
+        try write("kept\n", to: "b.txt", in: root)
+        _ = Git.stage(file, repoRoot: root)
+        commit("c", in: root)
+        try write("kept\nnew\n", to: "b.txt", in: root)
+        XCTAssertEqual(Git.blame(for: file, line: 2, repoRoot: root)?.isUncommitted, true, "git's own word for it is recognised")
+        XCTAssertEqual(Git.blame(for: file, line: 1, repoRoot: root)?.isUncommitted, false)
+        XCTAssertTrue(BlameInfo.uncommitted.isUncommitted)
+    }
+
     // MARK: - currentBranch / worktrees
 
     /// Fresh temp directory path (not created) for `git worktree add`, cleaned up in tearDown.
