@@ -84,4 +84,17 @@ final class GitRunTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: scratch), "the add went to the scratch index")
         XCTAssertEqual(r.porcelain(), ["?? a.txt"], "and not to the real one")
     }
+
+    /// Every launch is counted, a failing command and the error-capturing form included, so a host
+    /// can prove a mode of its own runs none.
+    func testEveryLaunchIsCounted() throws {
+        let r = try repo()
+        let before = Git.launchCount
+        _ = Git.run(["status", "--porcelain"], in: r.root)
+        _ = Git.run(["no-such-subcommand"], in: r.root)
+        _ = Git.runCapturingError(["rev-parse", "HEAD"], in: r.root)
+        XCTAssertEqual(Git.launchCount - before, 3)
+        _ = Git.repoRoot(for: r.root)
+        XCTAssertEqual(Git.launchCount - before, 4)
+    }
 }

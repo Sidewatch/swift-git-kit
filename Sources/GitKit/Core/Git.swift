@@ -30,6 +30,15 @@ public enum Git {
     private static let lock = NSLock()
     private nonisolated(unsafe) static var storedExecutable = "/usr/bin/git"
 
+    /// How many times `git` has been launched in this process, by every call. For a host to prove
+    /// a mode of its own runs no git at all: read it, do the work, read it again.
+    public static var launchCount: Int {
+        lock.lock(); defer { lock.unlock() }
+        return launches
+    }
+
+    private nonisolated(unsafe) static var launches = 0
+
     /// Seconds a read-only call may run before it is terminated and reported as failed (`nil`).
     public static let defaultTimeout: TimeInterval = 60
 
@@ -172,7 +181,10 @@ public enum Git {
     private static func launch(
         _ args: [String], in dir: URL, environment: [String: String], timeout: TimeInterval?, input: Data?, hooks: Bool
     ) -> ProcessRunner.Result {
-        ProcessRunner.run(
+        lock.lock()
+        launches += 1
+        lock.unlock()
+        return ProcessRunner.run(
             executable, args,
             directory: dir,
             input: input,

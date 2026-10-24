@@ -163,6 +163,11 @@ if var stamp = GitDirStamp.resolve(repoRoot: root) {
 Git.executable = "/opt/homebrew/bin/git"
 ```
 
+### Proving a mode runs no git
+
+`Git.launchCount` counts every launch in the process, a failing command included. Read it, do the work, read it
+again: a host's "git off" mode can show it launches nothing.
+
 ## Notes
 
 - All calls are **synchronous** and cheap. When scanning a whole repository, dispatch them off the main queue.
