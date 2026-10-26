@@ -207,13 +207,14 @@ public enum Git {
     }
 
     /// Every git repository strictly BELOW `root` (a directory holding a `.git` directory or
-    /// file), walking no deeper than `maxDepth`, skipping `.git` and any `skipping` name; at most
+    /// file), walking no deeper than `maxDepth`, skipping `.git`, any `skipping` name and any folder
+    /// `skipsFolder` answers true for (a game engine's cache beside its project's marker); at most
     /// `limit` results, in walk order. `root`'s own repo is ``repoRoot(for:)``'s job.
     ///
     /// For folders that are not a repo but hold checkouts (a WordPress site's plugins). A repo
     /// inside a repo is still returned: its own status is the truth for its files. Walks the disk.
     public static func nestedRepoRoots(
-        under root: URL, skipping skip: Set<String>,
+        under root: URL, skipping skip: Set<String>, skipsFolder: (URL) -> Bool = { _ in false },
         maxDepth: Int = 6, limit: Int = 64
     ) -> [URL] {
         // `walk`, not `enumerator(at:)`: a folder opened through a link is a root that IS a symbolic
@@ -232,7 +233,7 @@ public enum Git {
             }
             guard isDir else { return .next }
             let depth = url.standardizedFileURL.pathComponents.count - rootDepth  // the enumerator's `level`
-            return skip.contains(name) || depth >= maxDepth ? .skipDescendants : .next
+            return skip.contains(name) || depth >= maxDepth || skipsFolder(url) ? .skipDescendants : .next
         }
         return out
     }

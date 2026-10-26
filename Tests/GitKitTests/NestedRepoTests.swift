@@ -53,6 +53,15 @@ final class NestedRepoTests: XCTestCase {
         XCTAssertEqual(found(), ["wp-content/plugins/edd", "libraries/field-kit"])
     }
 
+    /// A folder the host calls noise (a game engine's cache, say) is not walked for checkouts.
+    func testAFolderTheHostCallsNoiseIsNotWalked() throws {
+        try mkdir("Library/PackageCache/com.example.tool/.git")
+        try mkdir("Packages/local-tool/.git")
+        let roots = Git.nestedRepoRoots(under: tmp, skipping: [], skipsFolder: { $0.lastPathComponent == "Library" })
+            .map { $0.standardizedFileURL.path.replacingOccurrences(of: tmp.standardizedFileURL.path + "/", with: "") }
+        XCTAssertEqual(roots, ["Packages/local-tool"])
+    }
+
     /// A checkout inside a checkout is still returned: git treats it as an opaque
     /// untracked directory, and its own status is the truth for its files.
     func testRepoInsideRepoIsReturned() throws {
