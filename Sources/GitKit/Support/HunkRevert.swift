@@ -29,7 +29,7 @@ public enum HunkRevert {
         let lines = LineTable(text)
         let header = hunk.header
         let first = header.newCount > 0 ? header.newStart - 1 : header.newStart  // 0-based
-        guard first >= 0, first + header.newCount <= lines.count else { return .textChanged }
+        guard first >= 0, first + header.newCount <= lines.count, hunk.new.count >= header.newCount else { return .textChanged }
         for offset in 0..<header.newCount where lines.text(of: first + offset) != hunk.new[offset] {
             return .textChanged
         }
@@ -57,8 +57,11 @@ public enum HunkRevert {
                 lastSide = nil
                 continue
             }
-            guard !result.isEmpty, let marker = line.first else { continue }
-            let body = String(line.dropFirst())
+            // The marker is the line's first SCALAR: a changed line that begins with a combining
+            // mark joins its `+` into one character, which is neither `+` nor anything else here.
+            guard !result.isEmpty, let scalar = line.unicodeScalars.first else { continue }
+            let marker = Character(scalar)
+            let body = String(String.UnicodeScalarView(line.unicodeScalars.dropFirst()))
             switch marker {
             case " ":
                 result[result.count - 1].old.append(body)

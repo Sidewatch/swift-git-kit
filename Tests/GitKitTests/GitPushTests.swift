@@ -60,6 +60,19 @@ final class GitPushTests: XCTestCase {
         XCTAssertEqual(Git.aheadBehind(repoRoot: repo.root).ahead, 0)
     }
 
+    func testABranchTrackingALocalBranchIsPublishedNotPushedIntoThisRepository() {
+        let origin = addRemote("origin")
+        let main = repo.branch(), mainHead = repo.head()
+        repo.git(["checkout", "-q", "-b", "topic", "--track", main])
+        try? repo.write("two\n", to: "f.txt")
+        repo.commitAll("two")
+        XCTAssertEqual(Git.pushTarget(repoRoot: repo.root).map(\.publishes), .success(true))
+        XCTAssertEqual(Git.push(repoRoot: repo.root).map(\.name), .success("origin/topic"))
+        XCTAssertEqual(head(of: "refs/heads/topic", in: origin), repo.head(), "the commits reached the remote")
+        XCTAssertEqual(head(of: "refs/heads/\(main)", in: repo.root), mainHead, "the local branch it tracks did not move")
+        XCTAssertTrue(Git.tracksLocalBranch("topic", repoRoot: repo.root), "and it still tracks what it was told to")
+    }
+
     func testAnUpstreamWithAnotherNameIsTheOnePushedTo() {
         let origin = addRemote("origin")
         repo.git(["push", "-q", "origin", "HEAD:refs/heads/trunk"])

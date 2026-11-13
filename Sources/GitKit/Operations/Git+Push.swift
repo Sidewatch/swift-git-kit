@@ -49,7 +49,11 @@ public extension Git {
         case .success(let found): target = found
         case .failure(let error): return .failure(error)
         }
-        let args = target.publishes ? ["push", "-u", target.remote, "HEAD"] : ["push", target.remote, "HEAD:refs/heads/\(target.branch)"]
+        // A branch that tracks a LOCAL branch is published without `-u`: its upstream is a choice
+        // someone made (`--track main`), and publishing does not rewrite it.
+        let publish =
+            tracksLocalBranch(target.branch, repoRoot: root) ? ["push", target.remote, "HEAD"] : ["push", "-u", target.remote, "HEAD"]
+        let args = target.publishes ? publish : ["push", target.remote, "HEAD:refs/heads/\(target.branch)"]
         let result = runCapturingError(args, in: root, timeout: longTimeout, hooks: true)
         return result.succeeded ? .success(target) : .failure(.failed(stderr: result.message))
     }
@@ -57,9 +61,17 @@ public extension Git {
 
 extension Git {
 
-    /// The remote and merge ref `branch` tracks (`branch.<name>.remote` / `.merge`), or nil.
+    /// Whether `branch` tracks another branch of this same repository (`branch.<name>.remote` is `.`).
+    static func tracksLocalBranch(_ branch: String, repoRoot root: URL) -> Bool {
+        run(["config", "--get", "branch.\(branch).remote"], in: root)?.trimmed == "."
+    }
+
+    /// The remote and merge ref `branch` tracks (`branch.<name>.remote` / `.merge`), or nil. A
+    /// branch that tracks a local one (`git checkout -b topic --track main`, remote `.`) tracks
+    /// nothing a push could reach: `git push . HEAD:refs/heads/main` would move the local `main`
+    /// and send nothing anywhere.
     static func upstream(of branch: String, repoRoot root: URL) -> (remote: String, merge: String)? {
-        guard let remote = run(["config", "--get", "branch.\(branch).remote"], in: root)?.trimmed, !remote.isEmpty,
+        guard let remote = run(["config", "--get", "branch.\(branch).remote"], in: root)?.trimmed, !remote.isEmpty, remote != ".",
             let merge = run(["config", "--get", "branch.\(branch).merge"], in: root)?.trimmed, !merge.isEmpty
         else { return nil }
         return (remote, merge)

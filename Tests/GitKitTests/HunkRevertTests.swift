@@ -47,6 +47,14 @@ final class HunkRevertTests: XCTestCase {
         XCTAssertEqual(applied(try outcome(head: head, now: now, line: 2), to: now), "a\nb\nc\nd\ne\nF\ng\n")
     }
 
+    func testALineBeginningWithACombiningMarkIsStillALine() throws {
+        // U+0301 after the diff's `+` or `-` makes one character of the two: the marker is read by scalar.
+        let head = "a\n\u{301}old\nb\n", now = "a\n\u{301}new\nb\n"
+        XCTAssertEqual(applied(try outcome(head: head, now: now, line: 2), to: now), head)
+        let added = "a\nb\n\u{301}tail\n"
+        XCTAssertEqual(applied(try outcome(head: "a\nb\n", now: added, line: 3), to: added), "a\nb\n")
+    }
+
     func testAnAddedRunIsTakenOut() throws {
         let head = "a\nb\n", now = "a\nnew one\nnew two\nb\n"
         XCTAssertEqual(applied(try outcome(head: head, now: now, line: 3), to: now), head)
