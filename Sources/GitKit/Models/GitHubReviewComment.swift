@@ -20,6 +20,9 @@ public struct GitHubReviewComment: Equatable, Sendable, Identifiable {
     /// The line it is on in the pull request's head, or nil once the code under it has changed
     /// (GitHub calls the comment outdated and keeps only ``originalLine``).
     public let line: Int?
+    /// The first line of the range it is about when it covers several (``line`` is the last); nil for a
+    /// comment on one line.
+    public let startLine: Int?
     /// The line it was written on, in the commit it was written against.
     public let originalLine: Int?
     /// `RIGHT` for the new side of the diff, `LEFT` for a removed line.
@@ -37,12 +40,13 @@ public struct GitHubReviewComment: Equatable, Sendable, Identifiable {
 
     /// A review comment.
     public init(
-        id: Int, path: String, line: Int?, originalLine: Int?, side: String, author: String, body: String, createdAt: Date?,
-        inReplyTo: Int?, url: String
+        id: Int, path: String, line: Int?, startLine: Int? = nil, originalLine: Int?, side: String, author: String, body: String,
+        createdAt: Date?, inReplyTo: Int?, url: String
     ) {
         self.id = id
         self.path = path
         self.line = line
+        self.startLine = startLine
         self.originalLine = originalLine
         self.side = side
         self.author = author
@@ -50,6 +54,13 @@ public struct GitHubReviewComment: Equatable, Sendable, Identifiable {
         self.createdAt = createdAt
         self.inReplyTo = inReplyTo
         self.url = url
+    }
+
+    /// The lines it is about in the pull request's head: one line, or the range a multi-line comment
+    /// covers. Nil for an outdated comment.
+    public var lines: ClosedRange<Int>? {
+        guard let line else { return nil }
+        return min(startLine ?? line, line)...line
     }
 
     /// Whether the code it was written on has changed since: it has no line in the head any more.

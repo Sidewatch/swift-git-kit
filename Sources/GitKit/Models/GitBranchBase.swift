@@ -16,12 +16,17 @@ import Foundation
 public struct GitBranchBase: Equatable, Sendable {
     /// The ref compared against, as it resolved (`origin/HEAD`, `main`, `origin/release/2.0`).
     public let ref: String
-    /// The merge base of that ref and `HEAD`.
+    /// The merge base of that ref and `HEAD`; the ref's own tip when ``sharesHistory`` is false.
     public let commit: String
+    /// False in a shallow clone whose history stops before the two branches meet: ``commit`` is then
+    /// the tip of ``ref``, and a diff from it also holds whatever landed on ``ref`` after the branch
+    /// left it. True everywhere else.
+    public let sharesHistory: Bool
 
     /// A base.
-    public init(ref: String, commit: String) {
+    public init(ref: String, commit: String, sharesHistory: Bool = true) {
         self.ref = ref
         self.commit = commit
+        self.sharesHistory = sharesHistory
     }
 }

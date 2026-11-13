@@ -28,10 +28,15 @@ public struct GitHubPullRequest: Equatable, Sendable {
     public let isDraft: Bool
     /// Its checks, taken together.
     public let checks: GitHubChecks
+    /// What was said about the pull request as a whole: its conversation's comments and the
+    /// summaries reviewers wrote with their reviews, oldest first. Comments on lines are
+    /// ``GitHubReviewComment``s, read apart.
+    public let discussion: [GitHubDiscussionComment]
 
     /// A pull request.
     public init(
-        number: Int, title: String, url: String, baseBranch: String, headBranch: String, state: String, isDraft: Bool, checks: GitHubChecks
+        number: Int, title: String, url: String, baseBranch: String, headBranch: String, state: String, isDraft: Bool, checks: GitHubChecks,
+        discussion: [GitHubDiscussionComment] = []
     ) {
         self.number = number
         self.title = title
@@ -41,6 +46,7 @@ public struct GitHubPullRequest: Equatable, Sendable {
         self.state = state
         self.isDraft = isDraft
         self.checks = checks
+        self.discussion = discussion
     }
 
     /// Whether it is still open.

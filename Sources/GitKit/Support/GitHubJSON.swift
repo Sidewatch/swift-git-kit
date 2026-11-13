@@ -16,7 +16,7 @@ import Foundation
 public enum GitHubJSON {
 
     /// The fields ``pullRequest(from:)`` reads, as `gh pr view --json` takes them.
-    public static let pullRequestFields = "number,title,url,baseRefName,headRefName,state,isDraft,statusCheckRollup"
+    public static let pullRequestFields = "number,title,url,baseRefName,headRefName,state,isDraft,statusCheckRollup,comments,reviews"
 
     /// The pull request in the output of `gh pr view --json` with ``pullRequestFields``; nil for
     /// anything else (an error message, a branch with no pull request).
@@ -27,7 +27,34 @@ public enum GitHubJSON {
         return GitHubPullRequest(
             number: number, title: json["title"] as? String ?? "", url: json["url"] as? String ?? "", baseBranch: base,
             headBranch: json["headRefName"] as? String ?? "", state: json["state"] as? String ?? "",
-            isDraft: json["isDraft"] as? Bool ?? false, checks: checks(from: json["statusCheckRollup"] as? [[String: Any]] ?? []))
+            isDraft: json["isDraft"] as? Bool ?? false, checks: checks(from: json["statusCheckRollup"] as? [[String: Any]] ?? []),
+            discussion: discussion(comments: json["comments"] as? [[String: Any]] ?? [], reviews: json["reviews"] as? [[String: Any]] ?? [])
+        )
+    }
+
+    /// The conversation's comments (a minimized one left out, as GitHub hides it) and the reviews
+    /// that carry a summary, oldest first. A review with no words of its own is only its line
+    /// comments, which are read apart.
+    static func discussion(comments: [[String: Any]], reviews: [[String: Any]]) -> [GitHubDiscussionComment] {
+        let formatter = ISO8601DateFormatter()
+        func author(_ item: [String: Any]) -> String { (item["author"] as? [String: Any])?["login"] as? String ?? "" }
+        func text(_ item: [String: Any]) -> String? {
+            guard let body = item["body"] as? String, !body.trimmed.isEmpty else { return nil }
+            return body
+        }
+        let said = comments.compactMap { item -> GitHubDiscussionComment? in
+            guard item["isMinimized"] as? Bool != true, let body = text(item) else { return nil }
+            return GitHubDiscussionComment(
+                author: author(item), body: body, createdAt: (item["createdAt"] as? String).flatMap(formatter.date(from:)),
+                url: item["url"] as? String ?? "", reviewState: nil)
+        }
+        let summaries = reviews.compactMap { item -> GitHubDiscussionComment? in
+            guard let body = text(item) else { return nil }
+            return GitHubDiscussionComment(
+                author: author(item), body: body, createdAt: (item["submittedAt"] as? String).flatMap(formatter.date(from:)), url: "",
+                reviewState: item["state"] as? String ?? "COMMENTED")
+        }
+        return (said + summaries).sorted { ($0.createdAt ?? .distantPast) < ($1.createdAt ?? .distantPast) }
     }
 
     /// The conclusions of a finished check that count as passed.
@@ -61,7 +88,8 @@ public enum GitHubJSON {
         return arrays(in: data).flatMap { $0 }.compactMap { item -> GitHubReviewComment? in
             guard let id = item["id"] as? Int, let path = item["path"] as? String, let body = item["body"] as? String else { return nil }
             return GitHubReviewComment(
-                id: id, path: path, line: item["line"] as? Int, originalLine: item["original_line"] as? Int,
+                id: id, path: path, line: item["line"] as? Int, startLine: item["start_line"] as? Int,
+                originalLine: item["original_line"] as? Int,
                 side: item["side"] as? String ?? "RIGHT", author: (item["user"] as? [String: Any])?["login"] as? String ?? "",
                 body: body, createdAt: (item["created_at"] as? String).flatMap(formatter.date(from:)),
                 inReplyTo: item["in_reply_to_id"] as? Int, url: item["html_url"] as? String ?? "")

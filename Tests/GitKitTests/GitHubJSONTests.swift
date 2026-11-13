@@ -25,6 +25,70 @@ final class GitHubJSONTests: XCTestCase {
           "number": 42,
           "reviewDecision": "APPROVED",
           "state": "OPEN",
+          "comments": [
+            {
+              "id": "IC_kwDOExample8AAAABl_l9lQ",
+              "author": {
+                "login": "tomas-lindqvist"
+              },
+              "authorAssociation": "MEMBER",
+              "body": "Please split the rename into its own pull request.",
+              "createdAt": "2026-11-12T08:15:00Z",
+              "includesCreatedEdit": false,
+              "isMinimized": false,
+              "minimizedReason": "",
+              "reactionGroups": [],
+              "url": "https://github.com/example-org/harbour/pull/42#issuecomment-684467752",
+              "viewerDidAuthor": false
+            },
+            {
+              "id": "IC_kwDOExample8AAAABl_l9lR",
+              "author": {
+                "login": "release-bot"
+              },
+              "authorAssociation": "NONE",
+              "body": "Hidden as outdated.",
+              "createdAt": "2026-11-12T08:20:00Z",
+              "includesCreatedEdit": false,
+              "isMinimized": true,
+              "minimizedReason": "outdated",
+              "reactionGroups": [],
+              "url": "https://github.com/example-org/harbour/pull/42#issuecomment-684467753",
+              "viewerDidAuthor": false
+            }
+          ],
+          "reviews": [
+            {
+              "id": "PRR_kwDOExample8AAAABXtwOoQ",
+              "author": {
+                "login": "mira-okafor"
+              },
+              "authorAssociation": "MEMBER",
+              "body": "Needs a test for the empty case.",
+              "submittedAt": "2026-11-12T07:00:00Z",
+              "includesCreatedEdit": false,
+              "reactionGroups": [],
+              "state": "CHANGES_REQUESTED",
+              "commit": {
+                "oid": "1111111111111111111111111111111111111111"
+              }
+            },
+            {
+              "id": "PRR_kwDOExample8AAAABXtwOoR",
+              "author": {
+                "login": "mira-okafor"
+              },
+              "authorAssociation": "MEMBER",
+              "body": "",
+              "submittedAt": "2026-11-12T07:30:00Z",
+              "includesCreatedEdit": false,
+              "reactionGroups": [],
+              "state": "COMMENTED",
+              "commit": {
+                "oid": "1111111111111111111111111111111111111111"
+              }
+            }
+          ],
           "statusCheckRollup": [
             {
               "__typename": "CheckRun",
@@ -153,6 +217,34 @@ final class GitHubJSONTests: XCTestCase {
         for field in GitHubJSON.pullRequestFields.split(separator: ",") {
             XCTAssertTrue(pullRequestJSON.contains("\"\(field)\""), "gh's real output carries \(field)")
         }
+    }
+
+    func testWhatWasSaidAboutThePullRequestAsAWholeIsReadOldestFirst() throws {
+        let pr = try XCTUnwrap(GitHubJSON.pullRequest(from: Data(pullRequestJSON.utf8)))
+        XCTAssertEqual(pr.discussion.map(\.author), ["mira-okafor", "tomas-lindqvist"], "a review's summary and a comment, by date")
+        XCTAssertEqual(pr.discussion.first?.body, "Needs a test for the empty case.")
+        XCTAssertEqual(pr.discussion.first?.reviewState, "CHANGES_REQUESTED")
+        XCTAssertEqual(pr.discussion.first?.url, "", "gh gives a review no address")
+        XCTAssertNil(pr.discussion.last?.reviewState)
+        XCTAssertEqual(pr.discussion.last?.url, "https://github.com/example-org/harbour/pull/42#issuecomment-684467752")
+        XCTAssertFalse(pr.discussion.contains { $0.body.contains("Hidden") }, "a comment GitHub minimized is left out")
+        XCTAssertEqual(pr.discussion.count, 2, "a review with no words of its own is only its line comments")
+    }
+
+    func testACommentOnSeveralLinesCoversThemAll() {
+        let json =
+            #"[{"id": 9, "path": "a.swift", "body": "all of this", "user": {"login": "x"}, "line": 14, "start_line": 10, "side": "RIGHT", "start_side": "RIGHT"}]"#
+        let comment = GitHubJSON.reviewComments(from: Data(json.utf8)).first
+        XCTAssertEqual(comment?.startLine, 10)
+        XCTAssertEqual(comment?.lines, 10...14)
+        let single = GitHubReviewComment(
+            id: 1, path: "a", line: 7, originalLine: 7, side: "RIGHT", author: "x", body: "b", createdAt: nil, inReplyTo: nil, url: "")
+        XCTAssertEqual(single.lines, 7...7)
+        let outdated = GitHubReviewComment(
+            id: 2, path: "a", line: nil, startLine: nil, originalLine: 7, side: "RIGHT", author: "x", body: "b", createdAt: nil,
+            inReplyTo: nil,
+            url: "")
+        XCTAssertNil(outdated.lines)
     }
 
     func testWhatIsNotAPullRequestIsNil() {

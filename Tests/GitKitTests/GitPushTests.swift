@@ -107,6 +107,39 @@ final class GitPushTests: XCTestCase {
             "the remote's branches, then local ones, without the branch checked out")
     }
 
+    func testAShallowCloneWithNoSharedCommitIsMeasuredFromTheBasesTipAndSaysSo() throws {
+        let origin = addRemote("origin")
+        let main = repo.branch()
+        repo.git(["push", "-q", "origin", main])
+        repo.git(["checkout", "-q", "-b", "topic"])
+        try repo.write("topic\n", to: "t.txt")
+        repo.commitAll("topic work")
+        repo.git(["push", "-q", "origin", "topic"])
+        let mainTip = head(of: "refs/heads/\(main)", in: origin)
+
+        // One commit of the topic and one of main, as a CI checkout has them: no commit in common.
+        let shallow = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("gitpush-shallow-\(UUID().uuidString)")
+        remotes.append(shallow)
+        _ = Git.run(
+            ["clone", "-q", "--depth", "1", "--branch", "topic", "file://" + origin.path, shallow.path],
+            in: URL(fileURLWithPath: NSTemporaryDirectory()))
+        _ = Git.run(["fetch", "-q", "--depth", "1", "origin", "\(main):refs/remotes/origin/\(main)"], in: shallow)
+        XCTAssertEqual(
+            Git.run(["rev-parse", "--is-shallow-repository"], in: shallow)?.trimmingCharacters(in: .whitespacesAndNewlines), "true")
+        XCTAssertNil(Git.mergeBase(with: "origin/\(main)", repoRoot: shallow), "the clone holds no commit the two share")
+
+        // Nothing preferred: the clone has no `origin/HEAD` and no local main, only the remote's main.
+        XCTAssertNil(Git.run(["rev-parse", "--verify", "--quiet", "origin/HEAD"], in: shallow))
+        XCTAssertEqual(Git.branchBase(repoRoot: shallow)?.ref, "origin/\(main)", "the integration branch is found on the remote")
+        let base = try XCTUnwrap(Git.branchBase(repoRoot: shallow, preferred: main))
+        XCTAssertEqual(base.ref, "origin/\(main)")
+        XCTAssertEqual(base.commit, mainTip, "the base's own tip")
+        XCTAssertFalse(base.sharesHistory, "and it says the comparison is with the tip, not where the branch left it")
+
+        // A full clone is unchanged: a real merge base, and no fallback for a ref that shares nothing.
+        XCTAssertEqual(Git.branchBase(repoRoot: repo.root, preferred: main)?.sharesHistory, true)
+    }
+
     func testAnUpstreamWithAnotherNameIsTheOnePushedTo() {
         let origin = addRemote("origin")
         repo.git(["push", "-q", "origin", "HEAD:refs/heads/trunk"])

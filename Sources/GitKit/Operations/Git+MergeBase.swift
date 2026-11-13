@@ -36,12 +36,17 @@ public extension Git {
     /// `origin/release/2.0`): a pull request names its base without the remote, and a checkout
     /// often has that branch only as the remote's.
     static func branchBase(repoRoot: URL, preferred: String? = nil) -> GitBranchBase? {
+        let remoteNames = remotes(repoRoot: repoRoot)
         var candidates: [String] = []
         if let preferred, !preferred.isEmpty {
             candidates.append(preferred)
-            candidates += remotes(repoRoot: repoRoot).map { $0 + "/" + preferred }
+            candidates += remoteNames.map { $0 + "/" + preferred }
         }
+        // The integration branch as the remote names it, then local, then on each remote: a clone of
+        // one branch (`--branch topic --depth 1`, a CI checkout) has neither `origin/HEAD` nor a
+        // local `main`, only `origin/main` once it is fetched.
         candidates += ["origin/HEAD", "main", "master"]
+        candidates += remoteNames.flatMap { [$0 + "/main", $0 + "/master"] }
         for candidate in candidates {
             // Skip a candidate that doesn't resolve, or merge-base would report the failure
             // as "no shared history" and stop the search early.
@@ -49,6 +54,14 @@ public extension Git {
                 let commit = mergeBase(with: candidate, repoRoot: repoRoot)
             else { continue }
             return GitBranchBase(ref: candidate, commit: commit)
+        }
+        // A shallow clone (`--depth 1`, most CI checkouts) may hold no commit the two branches share.
+        // The branch is then compared with the tip of the first base that resolves, and says so.
+        guard run(["rev-parse", "--is-shallow-repository"], in: repoRoot)?.trimmed == "true" else { return nil }
+        for candidate in candidates {
+            guard let tip = run(["rev-parse", "--verify", "--quiet", candidate + "^{commit}"], in: repoRoot)?.trimmed, !tip.isEmpty
+            else { continue }
+            return GitBranchBase(ref: candidate, commit: tip, sharesHistory: false)
         }
         return nil
     }
