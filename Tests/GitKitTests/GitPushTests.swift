@@ -73,6 +73,40 @@ final class GitPushTests: XCTestCase {
         XCTAssertTrue(Git.tracksLocalBranch("topic", repoRoot: repo.root), "and it still tracks what it was told to")
     }
 
+    func testABranchIsMeasuredFromThePreferredBaseAndElseTheDefault() throws {
+        let origin = addRemote("origin")
+        let main = repo.branch()
+        repo.git(["push", "-q", "origin", main])
+        // A release branch two commits on from main, then a topic branch off the release.
+        repo.git(["checkout", "-q", "-b", "release/2.0"])
+        try repo.write("release\n", to: "r.txt")
+        let releaseHead = repo.commitAll("release work")
+        repo.git(["push", "-q", "origin", "release/2.0"])
+        repo.git(["checkout", "-q", "-b", "topic"])
+        try repo.write("topic\n", to: "t.txt")
+        repo.commitAll("topic work")
+        let mainHead = head(of: "refs/heads/\(main)", in: origin)
+
+        let automatic = try XCTUnwrap(Git.branchBase(repoRoot: repo.root))
+        XCTAssertEqual(automatic.commit, mainHead, "with nothing preferred: where it left the integration branch")
+        let preferred = try XCTUnwrap(Git.branchBase(repoRoot: repo.root, preferred: "release/2.0"))
+        XCTAssertEqual(
+            preferred, GitBranchBase(ref: "release/2.0", commit: releaseHead),
+            "a pull request into the release shows the topic's work alone")
+
+        // The release branch only on the remote, as a fresh checkout of the topic has it.
+        repo.git(["branch", "-q", "-D", "release/2.0"])
+        let remoteOnly = try XCTUnwrap(Git.branchBase(repoRoot: repo.root, preferred: "release/2.0"))
+        XCTAssertEqual(remoteOnly, GitBranchBase(ref: "origin/release/2.0", commit: releaseHead))
+        XCTAssertEqual(
+            Git.branchBase(repoRoot: repo.root, preferred: "no/such/branch")?.commit, mainHead, "a base that is not there falls back")
+
+        let candidates = Git.baseCandidates(repoRoot: repo.root)
+        XCTAssertEqual(
+            candidates, ["origin/\(main)", "origin/release/2.0", main],
+            "the remote's branches, then local ones, without the branch checked out")
+    }
+
     func testAnUpstreamWithAnotherNameIsTheOnePushedTo() {
         let origin = addRemote("origin")
         repo.git(["push", "-q", "origin", "HEAD:refs/heads/trunk"])

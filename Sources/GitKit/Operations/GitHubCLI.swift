@@ -46,4 +46,34 @@ public enum GitHubCLI {
         guard let gh = executablePath() else { return false }
         return ProcessRunner.run(gh, ["pr", "view", "--web"], directory: cwd).succeeded
     }
+
+    // MARK: - Reading a branch's pull request
+
+    /// Runs `gh` with arguments in a directory and returns its standard output, or nil when it
+    /// failed. Tests pass their own, so no test reaches the network.
+    public typealias Runner = @Sendable (_ arguments: [String], _ directory: URL) -> Data?
+
+    /// How long a read of a pull request may take before it is given up.
+    public static let readTimeout: TimeInterval = 20
+
+    /// The real `gh`: nothing prompts, nothing is coloured, and a slow network is given up on.
+    public static let liveRunner: Runner = { arguments, directory in
+        guard let gh = executablePath() else { return nil }
+        let result = ProcessRunner.run(
+            gh, arguments, directory: directory, environment: ["GH_PROMPT_DISABLED": "1", "NO_COLOR": "1", "GH_NO_UPDATE_NOTIFIER": "1"],
+            timeout: readTimeout, outputLimit: 8 << 20)
+        return result.succeeded ? result.stdout : nil
+    }
+
+    /// The pull request of the branch checked out in `cwd`, or nil: no `gh`, not signed in, no
+    /// pull request for the branch, or no network. Reads only. Blocking: call off the main thread.
+    public static func pullRequest(cwd: URL, run: Runner = liveRunner) -> GitHubPullRequest? {
+        run(["pr", "view", "--json", GitHubJSON.pullRequestFields], cwd).flatMap(GitHubJSON.pullRequest(from:))
+    }
+
+    /// The comments reviewers left on the lines of pull request `number`, oldest first; empty when
+    /// there are none or they could not be read. Reads only. Blocking: call off the main thread.
+    public static func reviewComments(number: Int, cwd: URL, run: Runner = liveRunner) -> [GitHubReviewComment] {
+        run(["api", "--paginate", "repos/{owner}/{repo}/pulls/\(number)/comments"], cwd).map(GitHubJSON.reviewComments(from:)) ?? []
+    }
 }
