@@ -37,24 +37,31 @@ public extension Git {
     /// often has that branch only as the remote's.
     static func branchBase(repoRoot: URL, preferred: String? = nil) -> GitBranchBase? {
         let remoteNames = remotes(repoRoot: repoRoot)
-        var candidates: [String] = []
-        if let preferred, !preferred.isEmpty {
-            candidates.append(preferred)
-            candidates += remoteNames.map { $0 + "/" + preferred }
+        /// The first of `refs` that resolves and shares history with `HEAD`.
+        func firstBase(among refs: [String]) -> GitBranchBase? {
+            for candidate in refs {
+                // Skip a candidate that doesn't resolve, or merge-base would report the failure
+                // as "no shared history" and stop the search early.
+                guard run(["rev-parse", "--verify", "--quiet", candidate + "^{commit}"], in: repoRoot) != nil,
+                    let commit = mergeBase(with: candidate, repoRoot: repoRoot)
+                else { continue }
+                return GitBranchBase(ref: candidate, commit: commit)
+            }
+            return nil
         }
+        var preferredRefs: [String] = []
+        if let preferred, !preferred.isEmpty { preferredRefs = [preferred] + remoteNames.map { $0 + "/" + preferred } }
+        if let base = firstBase(among: preferredRefs) { return base }
         // The integration branch as the remote names it, then local, then on each remote: a clone of
         // one branch (`--branch topic --depth 1`, a CI checkout) has neither `origin/HEAD` nor a
         // local `main`, only `origin/main` once it is fetched.
-        candidates += ["origin/HEAD", "main", "master"]
-        candidates += remoteNames.flatMap { [$0 + "/main", $0 + "/master"] }
-        for candidate in candidates {
-            // Skip a candidate that doesn't resolve, or merge-base would report the failure
-            // as "no shared history" and stop the search early.
-            guard run(["rev-parse", "--verify", "--quiet", candidate + "^{commit}"], in: repoRoot) != nil,
-                let commit = mergeBase(with: candidate, repoRoot: repoRoot)
-            else { continue }
-            return GitBranchBase(ref: candidate, commit: commit)
-        }
+        let defaults = ["origin/HEAD", "main", "master"] + remoteNames.flatMap { [$0 + "/main", $0 + "/master"] }
+        // With nothing preferred (or a preferred base that is not in this checkout), the branch this
+        // one was cut from when that is nearer than the integration branch: a branch stacked on
+        // another shows its own work, not its parent's too.
+        if let parent = parentBranch(repoRoot: repoRoot, defaults: defaults) { return parent }
+        if let base = firstBase(among: defaults) { return base }
+        let candidates = preferredRefs + defaults
         // A shallow clone (`--depth 1`, most CI checkouts) may hold no commit the two branches share.
         // The branch is then compared with the tip of the first base that resolves, and says so.
         guard run(["rev-parse", "--is-shallow-repository"], in: repoRoot)?.trimmed == "true" else { return nil }
@@ -64,6 +71,59 @@ public extension Git {
             return GitBranchBase(ref: candidate, commit: tip, sharesHistory: false)
         }
         return nil
+    }
+
+    /// The most branches ``parentBranch(repoRoot:defaults:)`` weighs: past this a repository's
+    /// branches are too many to count commits against one by one on every refresh.
+    static let parentBranchCandidateLimit = 40
+
+    /// The branch the current one was cut from, when it is nearer than the integration branch: of
+    /// the branches whose tip is an ancestor of `HEAD` (not `HEAD` itself, not this branch or its own
+    /// remote copy), the one with the fewest commits between it and `HEAD`, and only if that is
+    /// fewer than the commits since the merge base with the first of `defaults` that resolves. So
+    /// a branch stacked on `feature-a` is measured from `feature-a`; a branch cut from `main` is
+    /// left to the default, as is one whose only ancestors are long-merged branches further back
+    /// than `main`. Nothing is kept: a rebase is seen on the next read.
+    static func parentBranch(repoRoot: URL, defaults: [String]) -> GitBranchBase? {
+        guard let current = currentBranch(repoRoot: repoRoot), !isDetachedHead(repoRoot: repoRoot) else { return nil }
+        func commits(since ref: String) -> Int? {
+            run(["rev-list", "--count", ref + "..HEAD"], in: repoRoot).flatMap { Int($0.trimmed) }
+        }
+        // How far the integration branch is: a parent has to be nearer than this.
+        var defaultDistance: Int?
+        var defaultTip: String?
+        for candidate in defaults {
+            guard run(["rev-parse", "--verify", "--quiet", candidate + "^{commit}"], in: repoRoot) != nil,
+                let base = mergeBase(with: candidate, repoRoot: repoRoot), let distance = commits(since: base)
+            else { continue }
+            (defaultDistance, defaultTip) = (distance, base)
+            break
+        }
+        let remoteNames = Set(remotes(repoRoot: repoRoot))
+        let own = Set([current] + remoteNames.map { $0 + "/" + current })
+        let merged =
+            (run(
+                ["for-each-ref", "--merged", "HEAD", "--format=%(refname:short) %(objectname)", "refs/heads", "refs/remotes"], in: repoRoot)
+            ?? "")
+            .components(separatedBy: "\n").compactMap { line -> (ref: String, tip: String)? in
+                let parts = line.trimmed.split(separator: " ")
+                guard parts.count == 2 else { return nil }
+                let ref = String(parts[0])
+                return own.contains(ref) || ref.hasSuffix("/HEAD") || remoteNames.contains(ref) ? nil : (ref, String(parts[1]))
+            }
+        guard let head = run(["rev-parse", "HEAD"], in: repoRoot)?.trimmed, merged.count <= parentBranchCandidateLimit else { return nil }
+        var best: (ref: String, tip: String, distance: Int)?
+        for candidate in merged where candidate.tip != head && candidate.tip != defaultTip {
+            guard let distance = commits(since: candidate.tip), distance > 0 else { continue }
+            // Nearer wins; at the same distance a local branch before a remote's copy of it.
+            if best == nil || distance < best!.distance
+                || (distance == best!.distance && !candidate.ref.contains("/") && best!.ref.contains("/"))
+            {
+                best = (candidate.ref, candidate.tip, distance)
+            }
+        }
+        guard let best, defaultDistance.map({ best.distance < $0 }) ?? true else { return nil }
+        return GitBranchBase(ref: best.ref, commit: best.tip)
     }
 
     /// The branches a branch could be compared against: the remote's branches, then local ones,

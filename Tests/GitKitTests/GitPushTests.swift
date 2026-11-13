@@ -88,7 +88,10 @@ final class GitPushTests: XCTestCase {
         let mainHead = head(of: "refs/heads/\(main)", in: origin)
 
         let automatic = try XCTUnwrap(Git.branchBase(repoRoot: repo.root))
-        XCTAssertEqual(automatic.commit, mainHead, "with nothing preferred: where it left the integration branch")
+        XCTAssertEqual(
+            automatic, GitBranchBase(ref: "release/2.0", commit: releaseHead), "with nothing preferred: the branch it was cut from")
+        XCTAssertEqual(
+            Git.branchBase(repoRoot: repo.root, preferred: main)?.commit, mainHead, "a preferred base wins over the detected parent")
         let preferred = try XCTUnwrap(Git.branchBase(repoRoot: repo.root, preferred: "release/2.0"))
         XCTAssertEqual(
             preferred, GitBranchBase(ref: "release/2.0", commit: releaseHead),
@@ -99,7 +102,8 @@ final class GitPushTests: XCTestCase {
         let remoteOnly = try XCTUnwrap(Git.branchBase(repoRoot: repo.root, preferred: "release/2.0"))
         XCTAssertEqual(remoteOnly, GitBranchBase(ref: "origin/release/2.0", commit: releaseHead))
         XCTAssertEqual(
-            Git.branchBase(repoRoot: repo.root, preferred: "no/such/branch")?.commit, mainHead, "a base that is not there falls back")
+            Git.branchBase(repoRoot: repo.root, preferred: "no/such/branch"), GitBranchBase(ref: "origin/release/2.0", commit: releaseHead),
+            "a base that is not there is as good as none: the branch it was cut from")
 
         let candidates = Git.baseCandidates(repoRoot: repo.root)
         XCTAssertEqual(
@@ -138,6 +142,40 @@ final class GitPushTests: XCTestCase {
 
         // A full clone is unchanged: a real merge base, and no fallback for a ref that shares nothing.
         XCTAssertEqual(Git.branchBase(repoRoot: repo.root, preferred: main)?.sharesHistory, true)
+    }
+
+    func testAStackedBranchIsMeasuredFromTheBranchItWasCutFrom() throws {
+        let main = repo.branch()
+        // main ← feature-a (2 commits) ← feature-b (1 commit); and an old branch merged long ago.
+        repo.git(["branch", "-q", "old-merged"])
+        try repo.write("two\n", to: "m.txt")
+        repo.commitAll("main moves on")
+        repo.git(["checkout", "-q", "-b", "feature-a"])
+        try repo.write("a1\n", to: "a.txt")
+        repo.commitAll("a one")
+        try repo.write("a2\n", to: "a.txt")
+        let aTip = repo.commitAll("a two")
+        XCTAssertEqual(Git.branchBase(repoRoot: repo.root)?.ref, main, "a branch cut from main is measured from main")
+
+        repo.git(["checkout", "-q", "-b", "feature-b"])
+        XCTAssertEqual(
+            Git.branchBase(repoRoot: repo.root)?.ref, main,
+            "with no commit of its own yet a branch's tip is its parent's: left to the default")
+        try repo.write("b1\n", to: "b.txt")
+        repo.commitAll("b one")
+        let stacked = try XCTUnwrap(Git.branchBase(repoRoot: repo.root))
+        XCTAssertEqual(
+            stacked, GitBranchBase(ref: "feature-a", commit: aTip), "the stacked branch shows its own commit, not feature-a's two")
+        XCTAssertEqual(
+            Git.branchBase(repoRoot: repo.root, preferred: main)?.ref, main, "a preferred base (a choice, a pull request's) wins")
+
+        // A branch at the same commit (cut from this one, nothing on it yet) is a child, not a parent.
+        repo.git(["branch", "-q", "feature-c"])
+        XCTAssertEqual(Git.branchBase(repoRoot: repo.root)?.ref, "feature-a")
+
+        // Back on feature-a: its only other ancestor is the long-merged branch, further back than main.
+        repo.git(["checkout", "-q", "feature-a"])
+        XCTAssertEqual(Git.branchBase(repoRoot: repo.root)?.ref, main, "a branch merged long ago is not a parent")
     }
 
     func testAnUpstreamWithAnotherNameIsTheOnePushedTo() {
