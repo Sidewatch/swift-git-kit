@@ -82,8 +82,13 @@ extension GitDirStamp {
         return names.sorted().map { dir.appendingPathComponent($0, isDirectory: true) }
     }
 
-    /// The mtime of a path, nil when it does not exist.
+    /// The mtime of a path (a link's own, not its target's), nil when it does not exist. One `lstat`:
+    /// the tick reads every watched path of every checkout on the main thread, and
+    /// `FileManager.attributesOfItem` builds a whole attribute dictionary per path (6.5× the cost,
+    /// measured over 92 checkouts: 37.5 ms a tick against 5.8 ms).
     private static func modificationDate(of url: URL) -> Date? {
-        (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
+        var info = Darwin.stat()
+        guard lstat(url.path, &info) == 0 else { return nil }
+        return Date(timeIntervalSince1970: TimeInterval(info.st_mtimespec.tv_sec) + TimeInterval(info.st_mtimespec.tv_nsec) / 1e9)
     }
 }
