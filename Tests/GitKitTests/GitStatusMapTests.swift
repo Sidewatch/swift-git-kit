@@ -59,6 +59,21 @@ final class GitStatusMapTests: XCTestCase {
         }
     }
 
+    func testDecorationChangesNameOnlyThePathsWhoseMarkMoved() {
+        let before = GitStatusMap.build(status: [("src/A.swift", .modified), ("docs/old.md", .modified)], repoRoot: root)
+        let after = GitStatusMap.build(
+            status: [("src/A.swift", .modified), ("src/b.swift", .untracked), ("lib/c.swift", .modified)], repoRoot: root)
+        XCTAssertEqual(
+            after.decorationChanges(from: before),
+            ["/repo/src/b.swift", "/repo/lib/c.swift", "/repo/lib", "/repo/docs/old.md", "/repo/docs"],
+            "a new file, a new folder mark, a file and a folder that lost theirs; not the file that kept its kind, its folder or the root")
+        XCTAssertEqual(after.decorationChanges(from: after), [])
+        let staged = GitStatusMap.build(status: [("src/A.swift", .added)], repoRoot: root)
+        let modified = GitStatusMap.build(status: [("src/A.swift", .modified)], repoRoot: root)
+        XCTAssertEqual(staged.decorationChanges(from: modified), ["/repo/src/a.swift"], "a kind that changed, lowercased")
+        XCTAssertEqual(GitStatusMap.empty.decorationChanges(from: modified), ["/repo/src/a.swift", "/repo/src", "/repo"])
+    }
+
     func testKindLookupByAbsolutePath() {
         let map = GitStatusMap.build(status: [("src/main.swift", .modified)], repoRoot: root)
         XCTAssertEqual(map.kind(for: root.appendingPathComponent("src/main.swift")), .modified)

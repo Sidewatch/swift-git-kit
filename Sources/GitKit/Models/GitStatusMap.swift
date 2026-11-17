@@ -68,6 +68,17 @@ public struct GitStatusMap: Equatable, Sendable {
         !changedDirs.isEmpty && changedDirs.contains(url.standardizedFileURL.path)
     }
 
+    /// The paths, lowercased, whose decoration differs between this map and `other`: a file whose
+    /// kind changed, appeared or went, and a folder that gained or lost its "contains changes" mark.
+    /// A tree redraws the rows at these paths and leaves the rest. Lowercased because the lookup
+    /// falls back to a case-insensitive match (see the type note): compare a row's lowercased path.
+    public func decorationChanges(from other: GitStatusMap) -> Set<String> {
+        var changed = Set(changedDirs.symmetricDifference(other.changedDirs).map { $0.lowercased() })
+        for (path, kind) in kinds where other.kinds[path] != kind { changed.insert(path.lowercased()) }
+        for path in other.kinds.keys where kinds[path] == nil { changed.insert(path.lowercased()) }
+        return changed
+    }
+
     /// Builds the lookup from repo-relative `git status` paths. Runs off-main (touches disk to
     /// resolve the repo root's symlink aliases once per build, and to tell a submodule entry —
     /// a path that is a directory — from a file).
